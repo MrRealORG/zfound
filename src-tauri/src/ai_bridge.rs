@@ -78,6 +78,22 @@ fn find_worker_script() -> Option<PathBuf> {
     None
 }
 
+fn find_python_exe() -> PathBuf {
+    let candidates = [
+        PathBuf::from("E:/XFind_Pro/.venv/Scripts/python.exe"),
+        PathBuf::from(".venv/Scripts/python.exe"),
+        PathBuf::from("../.venv/Scripts/python.exe"),
+        PathBuf::from("../../.venv/Scripts/python.exe"),
+        PathBuf::from("C:/Python313/python.exe"),
+    ];
+    for c in &candidates {
+        if c.exists() {
+            return c.clone();
+        }
+    }
+    PathBuf::from("python")
+}
+
 impl AiWorkerBridge {
     pub fn ensure_started(&self) -> Result<(), String> {
         let mut guard = self.child.lock().map_err(|e| e.to_string())?;
@@ -86,8 +102,9 @@ impl AiWorkerBridge {
         }
 
         let script = find_worker_script().ok_or_else(|| "Could not locate core/ai_worker.py".to_string())?;
+        let python_exe = find_python_exe();
 
-        let mut cmd = Command::new("python");
+        let mut cmd = Command::new(&python_exe);
         cmd.arg(&script)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

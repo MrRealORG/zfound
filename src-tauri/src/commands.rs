@@ -131,16 +131,26 @@ pub fn get_app_info(state: tauri::State<AppState>) -> AppInfo {
 
 #[tauri::command]
 pub fn choose_folder() -> Option<String> {
-    let folder = rfd::FileDialog::new().pick_folder()?;
-    Some(folder.to_string_lossy().replace('\\', "/"))
+    std::thread::spawn(|| {
+        rfd::FileDialog::new().pick_folder()
+    })
+    .join()
+    .ok()
+    .flatten()
+    .map(|p| p.to_string_lossy().replace('\\', "/"))
 }
 
 #[tauri::command]
 pub fn choose_image_file() -> Option<String> {
-    let file = rfd::FileDialog::new()
-        .add_filter("Images", &["jpg", "jpeg", "png", "webp", "bmp"])
-        .pick_file()?;
-    Some(file.to_string_lossy().replace('\\', "/"))
+    std::thread::spawn(|| {
+        rfd::FileDialog::new()
+            .add_filter("Images", &["jpg", "jpeg", "png", "webp", "bmp"])
+            .pick_file()
+    })
+    .join()
+    .ok()
+    .flatten()
+    .map(|p| p.to_string_lossy().replace('\\', "/"))
 }
 
 #[tauri::command]

@@ -205,22 +205,33 @@
     }
 
     function initSplashScreen() {
+        if (!elements.splashScreen || !elements.splashProgressBar) {
+            if (elements.appRoot) {
+                elements.appRoot.classList.remove('hidden');
+                elements.appRoot.style.opacity = '1';
+            }
+            checkBackendInfo();
+            return;
+        }
+
         let progress = 0;
         const interval = setInterval(() => {
             progress += 25;
-            elements.splashProgressBar.style.width = `${progress}%`;
+            if (elements.splashProgressBar) elements.splashProgressBar.style.width = `${progress}%`;
 
-            if (progress === 50) {
+            if (progress === 50 && elements.splashStatusText) {
                 elements.splashStatusText.textContent = 'Mounting AI vision engine...';
-            } else if (progress === 75) {
+            } else if (progress === 75 && elements.splashStatusText) {
                 elements.splashStatusText.textContent = 'Preparing Apple-style workspace...';
             } else if (progress >= 100) {
                 clearInterval(interval);
-                elements.splashStatusText.textContent = 'Ready';
+                if (elements.splashStatusText) elements.splashStatusText.textContent = 'Ready';
                 setTimeout(() => {
-                    elements.splashScreen.classList.add('fade-out');
-                    elements.appRoot.classList.remove('hidden');
-                    elements.appRoot.style.opacity = '1';
+                    if (elements.splashScreen) elements.splashScreen.classList.add('fade-out');
+                    if (elements.appRoot) {
+                        elements.appRoot.classList.remove('hidden');
+                        elements.appRoot.style.opacity = '1';
+                    }
                     checkBackendInfo();
                 }, 300);
             }
