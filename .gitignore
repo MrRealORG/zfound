@@ -3,3 +3,6 @@ src-tauri/target/
 node_modules/
 *.log
 .zfound_index.json
+*.exe
+zfound_thumbs/
+
