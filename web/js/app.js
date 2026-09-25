@@ -25,8 +25,7 @@
 
         async selectFolder() {
             if (this.isTauri()) {
-                const p = prompt('Enter the absolute path to your image directory:\n(e.g., E:/XFind_Pro or C:/Users/YourName/Pictures)');
-                return p ? p.trim().replace(/\\/g, '/') : null;
+                return await window.__TAURI__.core.invoke('choose_folder');
             } else if (window.pywebview && window.pywebview.api) {
                 return await window.pywebview.api.select_folder();
             }
@@ -35,10 +34,23 @@
 
         async selectImageFile() {
             if (this.isTauri()) {
-                const p = prompt('Enter the absolute path to your query image:');
-                return p ? p.trim().replace(/\\/g, '/') : null;
+                return await window.__TAURI__.core.invoke('choose_image_file');
             } else if (window.pywebview && window.pywebview.api) {
                 return await window.pywebview.api.select_image_file();
+            }
+            return null;
+        },
+
+        async getDefaultFolder() {
+            if (this.isTauri()) {
+                return await window.__TAURI__.core.invoke('get_default_folder');
+            }
+            return null;
+        },
+
+        async setDefaultFolder(folder) {
+            if (this.isTauri()) {
+                return await window.__TAURI__.core.invoke('set_default_folder', { folder });
             }
             return null;
         },
@@ -63,7 +75,7 @@
             return { status: 'error', message: 'No backend bridge available' };
         },
 
-        async searchSimilar(queryPath, topK = 50, minScore = 0.40) {
+        async searchSimilar(queryPath, topK = 50, minScore = 0.70) {
             if (this.isTauri()) {
                 const results = await window.__TAURI__.core.invoke('search_similar', {
                     queryPath,
@@ -77,7 +89,7 @@
             return { status: 'error', message: 'No backend bridge available' };
         },
 
-        async getThumbnail(path, maxSize = 300) {
+        async getThumbnail(path, maxSize = 240) {
             if (this.isTauri()) {
                 return await window.__TAURI__.core.invoke('get_thumbnail', { path, maxSize });
             } else if (window.pywebview && window.pywebview.api) {
@@ -103,6 +115,23 @@
         }
     };
 
+    // Global intersection observer for fast, non-blocking thumbnail loading
+    const thumbnailObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const img = entry.target;
+                const path = img.dataset.src;
+                if (path && !img.dataset.loaded) {
+                    img.dataset.loaded = 'true';
+                    Bridge.getThumbnail(path, 240).then(b64 => {
+                        if (b64) img.src = b64;
+                    }).catch(() => {});
+                }
+                observer.unobserve(img);
+            }
+        });
+    }, { rootMargin: '120px' });
+
     // State
     const state = {
         activeView: 'finder',
@@ -111,7 +140,7 @@
         indexedCount: 0,
         activeQueryPath: '',
         activeModel: null,
-        minScoreThreshold: 0.40,
+        minScoreThreshold: 0.70,
         isIndexing: false
     };
 
@@ -125,6 +154,7 @@
         viewPanels: document.querySelectorAll('.view-panel'),
         btnSelectFolder: document.getElementById('btn-select-folder'),
         btnIndexImages: document.getElementById('btn-index-images'),
+        btnSetDefaultFolder: document.getElementById('btn-set-default-folder'),
         statScannedCount: document.getElementById('stat-scanned-count'),
         statIndexedCount: document.getElementById('stat-indexed-count'),
         statFolderPath: document.getElementById('stat-folder-path'),
@@ -150,54 +180,39 @@
         detectedModelsList: document.getElementById('detected-models-list'),
         liveLogsTerminal: document.getElementById('live-logs-terminal'),
         btnClearLogs: document.getElementById('btn-clear-logs'),
+        toastPill: document.getElementById('toast-pill'),
+        toastIcon: document.getElementById('toast-icon'),
+        toastText: document.getElementById('toast-text'),
         lightboxModal: document.getElementById('lightbox-modal'),
-        lightboxClose: document.getElementById('lightbox-close'),
         lightboxImg: document.getElementById('lightbox-img'),
         lightboxFilename: document.getElementById('lightbox-filename'),
         lightboxFilepath: document.getElementById('lightbox-filepath'),
         lightboxScoreBadge: document.getElementById('lightbox-score-badge'),
+        lightboxClose: document.getElementById('lightbox-close'),
         lightboxBtnOpen: document.getElementById('lightbox-btn-open'),
-        lightboxBtnReveal: document.getElementById('lightbox-btn-reveal'),
-        toastPill: document.getElementById('toast-pill'),
-        toastMessage: document.getElementById('toast-message'),
-        toastIcon: document.getElementById('toast-icon')
+        lightboxBtnReveal: document.getElementById('lightbox-btn-reveal')
     };
 
-    function showToast(message, icon = '✓') {
-        elements.toastMessage.textContent = message;
+    function showToast(message, icon = '✦') {
+        if (!elements.toastPill) return;
         elements.toastIcon.textContent = icon;
+        elements.toastText.textContent = message;
         elements.toastPill.classList.remove('hidden');
-        setTimeout(() => elements.toastPill.classList.add('hidden'), 3200);
+        clearTimeout(elements.toastPill._timer);
+        elements.toastPill._timer = setTimeout(() => {
+            elements.toastPill.classList.add('hidden');
+        }, 3200);
     }
 
-    function formatBytes(bytes) {
-        if (!bytes || bytes === 0) return '0 B';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-    }
-
-    function init() {
-        setupNavigation();
-        setupDropzone();
-        setupActions();
-        setupLightbox();
-        runSplashAnimation();
-    }
-
-    function runSplashAnimation() {
+    function initSplashScreen() {
         let progress = 0;
         const interval = setInterval(() => {
-            progress += 15;
-            if (progress > 100) progress = 100;
+            progress += 25;
             elements.splashProgressBar.style.width = `${progress}%`;
 
-            if (progress === 45) {
-                elements.splashStatusText.textContent = Bridge.isTauri()
-                    ? 'Loading Rust vision core...'
-                    : 'Mounting vision models...';
-            } else if (progress === 80) {
+            if (progress === 50) {
+                elements.splashStatusText.textContent = 'Mounting AI vision engine...';
+            } else if (progress === 75) {
                 elements.splashStatusText.textContent = 'Preparing Apple-style workspace...';
             } else if (progress >= 100) {
                 clearInterval(interval);
@@ -207,18 +222,18 @@
                     elements.appRoot.classList.remove('hidden');
                     elements.appRoot.style.opacity = '1';
                     checkBackendInfo();
-                }, 400);
+                }, 300);
             }
-        }, 100);
+        }, 80);
     }
 
     async function checkBackendInfo() {
         try {
             const info = await Bridge.getAppInfo();
             if (info) {
-                state.activeModel = info.active_model || 'Native Rust Vision';
-                elements.sidebarModelName.textContent = info.active_model || 'Ready';
-                elements.engineActiveModelTitle.textContent = info.active_model || 'Standard Vision';
+                state.activeModel = info.active_model || 'clip-vit-base-patch32';
+                elements.sidebarModelName.textContent = info.active_model || 'CLIP AI Ready';
+                elements.engineActiveModelTitle.textContent = info.active_model || 'clip-vit-base-patch32';
                 elements.engineDim.textContent = `${info.dimension || 512}-D Vector Space`;
 
                 if (info.models_available && info.models_available.length > 0) {
@@ -228,6 +243,14 @@
                             <span class="info-val">${m.dimension || 512}D • ${m.model_type || 'local'}</span>
                         </div>
                     `).join('');
+                }
+
+                // If user has a default folder saved, auto-load it
+                if (info.default_folder && !state.currentFolder) {
+                    state.currentFolder = info.default_folder;
+                    elements.statFolderPath.textContent = info.default_folder;
+                    elements.statFolderPath.title = info.default_folder;
+                    scanFolder(info.default_folder);
                 }
             }
         } catch (e) {
@@ -274,7 +297,7 @@
                     let cls = 'log-line';
                     if (l.includes('Saved') || l.includes('Loaded')) cls += ' log-storage';
                     else if (l.includes('Scanning') || l.includes('Discovered')) cls += ' log-scan';
-                    else if (l.includes('query') || l.includes('matches')) cls += ' log-match';
+                    else if (l.includes('query') || l.includes('matches') || l.includes('ranked')) cls += ' log-match';
                     return `<div class="${cls}">${escapeHtml(l)}</div>`;
                 }).join('');
                 elements.liveLogsTerminal.scrollTop = elements.liveLogsTerminal.scrollHeight;
@@ -289,6 +312,7 @@
     }
 
     function setupActions() {
+        // Native Windows Explorer folder picker (NO prompt)
         elements.btnSelectFolder.addEventListener('click', async () => {
             const folder = await Bridge.selectFolder();
             if (folder) {
@@ -298,6 +322,18 @@
                 scanFolder(folder);
             }
         });
+
+        // Set current folder as default
+        if (elements.btnSetDefaultFolder) {
+            elements.btnSetDefaultFolder.addEventListener('click', async () => {
+                if (!state.currentFolder) {
+                    showToast('Select a folder first', '⚠️');
+                    return;
+                }
+                await Bridge.setDefaultFolder(state.currentFolder);
+                showToast(`Default folder set to: ${state.currentFolder}`, '★');
+            });
+        }
 
         elements.btnIndexImages.addEventListener('click', async () => {
             if (!state.scannedItems.length || state.isIndexing) return;
@@ -359,7 +395,7 @@
             elements.lightboxScoreBadge.style.display = 'none';
         }
 
-        Bridge.getThumbnail(item.path, 1200).then(b64 => {
+        Bridge.getThumbnail(item.path, 1000).then(b64 => {
             if (b64) elements.lightboxImg.src = b64;
         }).catch(() => {});
 
@@ -389,7 +425,7 @@
                 if (info && info.indexed_count > 0) {
                     state.indexedCount = info.indexed_count;
                     elements.statIndexedCount.textContent = info.indexed_count;
-                    showToast(`Loaded ${info.indexed_count} indexed images from folder!`, '💾');
+                    showToast(`Loaded ${info.indexed_count} indexed items from folder!`, '💾');
                 } else {
                     state.indexedCount = 0;
                     elements.statIndexedCount.textContent = '0';
@@ -418,21 +454,19 @@
     function renderGallery(items) {
         elements.galleryGrid.innerHTML = '';
         const fragment = document.createDocumentFragment();
-        const displayBatch = items.slice(0, 200);
 
-        displayBatch.forEach((item) => {
+        items.forEach((item) => {
             const card = document.createElement('div');
             card.className = 'image-card';
             card.title = item.path;
 
             const img = document.createElement('img');
             img.alt = item.name;
-            img.loading = 'lazy';
+            img.dataset.src = item.path;
             img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"%3E%3C/svg%3E';
 
-            Bridge.getThumbnail(item.path, 300).then(b64 => {
-                if (b64) img.src = b64;
-            }).catch(() => {});
+            // Lazy-load via intersection observer
+            thumbnailObserver.observe(img);
 
             const overlay = document.createElement('div');
             overlay.className = 'image-card-overlay';
@@ -458,9 +492,9 @@
         state.isIndexing = true;
         elements.btnIndexImages.disabled = true;
         elements.indexProgressContainer.classList.remove('hidden');
-        elements.indexProgressBar.style.width = '25%';
-        elements.indexProgressPct.textContent = '25%';
-        elements.indexProgressLabel.textContent = 'Indexing image features...';
+        elements.indexProgressBar.style.width = '30%';
+        elements.indexProgressPct.textContent = '30%';
+        elements.indexProgressLabel.textContent = 'Extracting CLIP 512-D neural vectors...';
 
         try {
             const res = await Bridge.indexImages();
@@ -471,7 +505,7 @@
             if (res && res.status === 'success') {
                 state.indexedCount = res.indexed_count;
                 elements.statIndexedCount.textContent = res.indexed_count;
-                showToast(`Indexed ${res.indexed_count} images & saved to folder!`, '💾');
+                showToast(`Indexed ${res.indexed_count} images with AI vectors!`, '💾');
             } else {
                 showToast(res ? res.message : 'Indexing failed', '⚠️');
             }
@@ -487,6 +521,7 @@
     function setupDropzone() {
         const dropzone = elements.queryDropzone;
 
+        // Native file picker on click (NO prompt)
         dropzone.addEventListener('click', async (e) => {
             if (e.target.closest('#btn-clear-query')) return;
             const file = await Bridge.selectImageFile();
@@ -529,7 +564,7 @@
         const b64 = await Bridge.getThumbnail(filePath, 400);
         if (b64) elements.queryImgElement.src = b64;
 
-        elements.queryStatusText.textContent = 'Searching indexed visual memory...';
+        elements.queryStatusText.textContent = 'Searching CLIP 512-D neural memory...';
         runSimilaritySearch(filePath);
     }
 
@@ -557,8 +592,8 @@
 
         elements.resultsGrid.innerHTML = `
             <div class="empty-state results-empty">
-                <h3>Searching Visual Features...</h3>
-                <p>Comparing query against library</p>
+                <h3>Searching Neural Features...</h3>
+                <p>Comparing 512-D CLIP visual embeddings</p>
             </div>
         `;
 
@@ -567,7 +602,7 @@
             if (res && res.status === 'success') {
                 const results = res.results || [];
                 elements.resultsCountBadge.textContent = `${results.length} matches`;
-                elements.queryStatusText.textContent = `Found ${results.length} ranked matches`;
+                elements.queryStatusText.textContent = `Found ${results.length} ranked AI matches`;
                 renderSearchResults(results);
             } else {
                 elements.queryStatusText.textContent = res ? res.message : 'Search error';
@@ -601,12 +636,11 @@
 
             const img = document.createElement('img');
             img.alt = item.name;
-            img.loading = 'lazy';
+            img.dataset.src = item.path;
             img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"%3E%3C/svg%3E';
 
-            Bridge.getThumbnail(item.path, 320).then(b64 => {
-                if (b64) img.src = b64;
-            }).catch(() => {});
+            // Lazy-load with cache
+            thumbnailObserver.observe(img);
 
             const badge = document.createElement('div');
             badge.className = `score-badge ${item.is_exact ? 'exact' : ''}`;
@@ -655,10 +689,26 @@
         elements.resultsGrid.appendChild(fragment);
     }
 
-    if (window.__TAURI__) {
-        init();
+    function formatBytes(bytes) {
+        if (!bytes || bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    // Initialize application
+    function init() {
+        setupNavigation();
+        setupActions();
+        setupDropzone();
+        setupLightbox();
+        initSplashScreen();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
     } else {
-        window.addEventListener('pywebviewready', init);
-        setTimeout(init, 500);
+        init();
     }
 })();

@@ -1191,3 +1191,28 @@ body {
     margin-top: 6px;
 }
 
+.path-with-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-micro {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #e4e4e7;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.btn-micro:hover {
+    background: rgba(255, 255, 255, 0.22);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.4);
+}
+

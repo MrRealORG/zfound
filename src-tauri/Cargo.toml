@@ -21,3 +21,4 @@ walkdir = "2.5"
 rayon = "1.10"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "bmp"] }
 base64 = "0.22"
+rfd = "0.15"

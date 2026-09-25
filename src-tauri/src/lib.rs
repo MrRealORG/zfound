@@ -1,3 +1,4 @@
+mod ai_bridge;
 mod commands;
 mod hasher;
 mod model;
@@ -11,6 +12,10 @@ pub fn run() {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_app_info,
+            commands::choose_folder,
+            commands::choose_image_file,
+            commands::get_default_folder,
+            commands::set_default_folder,
             commands::scan_folder,
             commands::index_images,
             commands::search_similar,

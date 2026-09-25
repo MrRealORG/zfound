@@ -30,3 +30,14 @@ pub fn similarity_percentage(distance: u32, total_bits: u32) -> f32 {
         (sim * 100.0).max(0.0)
     }
 }
+
+pub fn cosine_similarity(v1: &[f32], v2: &[f32]) -> f32 {
+    if v1.len() != v2.len() || v1.is_empty() {
+        return 0.0;
+    }
+    let mut dot = 0.0f32;
+    for i in 0..v1.len() {
+        dot += v1[i] * v2[i];
+    }
+    dot.clamp(0.0, 1.0)
+}

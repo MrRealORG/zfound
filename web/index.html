@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZFound × Zeeno Soft</title>
     <link rel="stylesheet" href="css/style.css">
-    <link rel="icon" type="image/png" href="../assets/icon_64.png">
+    <link rel="icon" type="image/png" href="assets/icon_64.png">
 </head>
 <body class="apple-mono-theme">
 
@@ -13,7 +13,7 @@
     <div id="splash-screen" class="splash-container">
         <div class="splash-card">
             <div class="splash-icon-wrapper">
-                <img src="../assets/icon_256.png" alt="ZFound Icon" class="splash-icon">
+                <img src="assets/icon_256.png" alt="ZFound Icon" class="splash-icon" onerror="this.style.display='none'">
                 <div class="splash-icon-glow"></div>
             </div>
             <div class="splash-brand">
@@ -34,7 +34,7 @@
         <aside class="floating-glass-sidebar">
             <div class="sidebar-top">
                 <div class="brand-pill" title="ZFound × Zeeno Soft v0.1">
-                    <img src="../assets/icon_64.png" alt="Logo" class="sidebar-logo">
+                    <img src="assets/icon_64.png" alt="ZFound" class="sidebar-logo" onerror="this.outerHTML='<svg class=\'sidebar-logo-svg\' viewBox=\'0 0 32 32\' width=\'28\' height=\'28\' fill=\'none\'><rect width=\'32\' height=\'32\' rx=\'7\' fill=\'%23111\'/><path d=\'M8 9h16l-12 14h12\' stroke=\'%23fff\' stroke-width=\'2.5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/></svg>'">
                 </div>
                 
                 <nav class="sidebar-nav">
@@ -114,7 +114,10 @@
                     <div class="stat-separator"></div>
                     <div class="stat-cell folder-path-cell" title="Current folder">
                         <span class="stat-label">Active Directory</span>
-                        <span class="stat-value-path" id="stat-folder-path">No folder selected</span>
+                        <div class="path-with-btn">
+                            <span class="stat-value-path" id="stat-folder-path">No folder selected</span>
+                            <button id="btn-set-default-folder" class="btn-micro" title="Save this directory as your default starting folder">★ Default</button>
+                        </div>
                     </div>
                 </div>
 
@@ -157,8 +160,8 @@
                     <div class="header-actions">
                         <div class="filter-pill">
                             <span class="filter-label">Min Score</span>
-                            <input type="range" id="search-threshold" min="0" max="95" value="40" class="mini-slider">
-                            <span class="filter-val" id="search-threshold-val">40%</span>
+                            <input type="range" id="search-threshold" min="0" max="95" value="70" class="mini-slider">
+                            <span class="filter-val" id="search-threshold-val">70%</span>
                         </div>
                     </div>
                 </header>
