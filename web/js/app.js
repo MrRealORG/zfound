@@ -182,7 +182,7 @@
         btnClearLogs: document.getElementById('btn-clear-logs'),
         toastPill: document.getElementById('toast-pill'),
         toastIcon: document.getElementById('toast-icon'),
-        toastText: document.getElementById('toast-text'),
+        toastText: document.getElementById('toast-message') || document.getElementById('toast-text'),
         lightboxModal: document.getElementById('lightbox-modal'),
         lightboxImg: document.getElementById('lightbox-img'),
         lightboxFilename: document.getElementById('lightbox-filename'),
@@ -195,8 +195,8 @@
 
     function showToast(message, icon = '✦') {
         if (!elements.toastPill) return;
-        elements.toastIcon.textContent = icon;
-        elements.toastText.textContent = message;
+        if (elements.toastIcon) elements.toastIcon.textContent = icon;
+        if (elements.toastText) elements.toastText.textContent = message;
         elements.toastPill.classList.remove('hidden');
         clearTimeout(elements.toastPill._timer);
         elements.toastPill._timer = setTimeout(() => {

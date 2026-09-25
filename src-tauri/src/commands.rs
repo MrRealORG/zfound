@@ -23,7 +23,9 @@ pub struct PersistentIndexFile {
     pub version: String,
     pub folder: String,
     pub updated_at: u64,
+    #[serde(default)]
     pub model_name: String,
+    #[serde(default)]
     pub dimension: usize,
     pub items: Vec<PersistentIndexItem>,
 }
