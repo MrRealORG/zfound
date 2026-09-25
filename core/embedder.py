@@ -91,12 +91,12 @@ class FastEmbedder:
 
         self.model_name = target_path.name
         self.model_type = "siglip" if "siglip" in target_path.name.lower() else "clip"
+        self.is_ready = True
         
         # Determine output dimension
         dummy_img = Image.new("RGB", (224, 224), color=(128, 128, 128))
         test_emb = self.embed_image(dummy_img)
         self.dimension = len(test_emb)
-        self.is_ready = True
 
         if progress_cb:
             progress_cb("Neural model active", 100)
@@ -107,6 +107,19 @@ class FastEmbedder:
             "device": self.device,
             "status": "ready"
         }
+
+    def _extract_tensor(self, outputs):
+        import torch
+        if isinstance(outputs, torch.Tensor):
+            return outputs
+        for attr in ["image_embeds", "text_embeds", "pooler_output", "last_hidden_state"]:
+            if hasattr(outputs, attr):
+                val = getattr(outputs, attr)
+                if isinstance(val, torch.Tensor):
+                    if attr == "last_hidden_state" and len(val.shape) == 3:
+                        return val[:, 0, :]
+                    return val
+        return None
 
     def embed_image(self, image_input):
         import torch
@@ -128,15 +141,12 @@ class FastEmbedder:
         inputs = self.processor(images=pil_image, return_tensors="pt")
         with torch.no_grad():
             if hasattr(self.model, "get_image_features"):
-                features = self.model.get_image_features(**inputs)
+                outputs = self.model.get_image_features(**inputs)
             else:
                 outputs = self.model(**inputs)
-                if hasattr(outputs, "image_embeds"):
-                    features = outputs.image_embeds
-                elif hasattr(outputs, "pooler_output") and outputs.pooler_output is not None:
-                    features = outputs.pooler_output
-                else:
-                    features = outputs.last_hidden_state[:, 0, :]
+            features = self._extract_tensor(outputs)
+            if features is None:
+                raise ValueError("Could not extract feature tensor from model output")
 
         # Normalize to unit vector for cosine distance
         norm = torch.linalg.norm(features, dim=-1, keepdim=True)

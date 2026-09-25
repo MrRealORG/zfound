@@ -44,6 +44,8 @@
         async getDefaultFolder() {
             if (this.isTauri()) {
                 return await window.__TAURI__.core.invoke('get_default_folder');
+            } else if (window.pywebview && window.pywebview.api) {
+                return await window.pywebview.api.get_default_folder();
             }
             return null;
         },
@@ -51,6 +53,8 @@
         async setDefaultFolder(folder) {
             if (this.isTauri()) {
                 return await window.__TAURI__.core.invoke('set_default_folder', { folder });
+            } else if (window.pywebview && window.pywebview.api) {
+                return await window.pywebview.api.set_default_folder(folder);
             }
             return null;
         },

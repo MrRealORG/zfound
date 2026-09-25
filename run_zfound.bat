@@ -1,26 +1,19 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title ZFound x Zeeno Soft
+title ZFound x Zeeno Soft v0.1
 
+echo.
 echo ========================================================
-echo   Launching ZFound x Zeeno Soft (Rust + Tauri v2)
+echo   ZFound v0.1 - Minimal Vision Intelligence Workspace
+echo   Branded by Zeeno Soft
 echo ========================================================
 echo.
 
-if not exist "%~dp0WebView2Loader.dll" (
-    if exist "H:\cargo_target\zfound\debug\WebView2Loader.dll" (
-        echo Copying WebView2Loader.dll dependency...
-        copy /y "H:\cargo_target\zfound\debug\WebView2Loader.dll" "%~dp0" >nul
-    )
-)
+python app.py
 
-if not exist "%~dp0zfound.exe" (
-    if exist "H:\cargo_target\zfound\debug\zfound.exe" (
-        echo Copying latest zfound.exe binary...
-        copy /y "H:\cargo_target\zfound\debug\zfound.exe" "%~dp0" >nul
-    )
+if errorlevel 1 (
+    echo.
+    echo [ZFound] App exited with an error.
+    pause
 )
-
-echo Starting ZFound application...
-start "" "%~dp0zfound.exe"
