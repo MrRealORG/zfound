@@ -105,18 +105,26 @@ impl AiWorkerBridge {
         let stdout = child.stdout.take().ok_or_else(|| "Failed to open worker stdout".to_string())?;
         let mut reader = BufReader::new(stdout);
 
-        // Read startup JSON line
+        // Read startup JSON line (skipping any non-JSON lines if present)
         let mut first_line = String::new();
-        reader.read_line(&mut first_line).map_err(|e| format!("Failed to read worker init: {}", e))?;
-
-        if let Ok(init) = serde_json::from_str::<serde_json::Value>(&first_line) {
-            if init.get("status").and_then(|v| v.as_str()) == Some("ready") {
-                *self.is_ready.lock().unwrap() = true;
-                if let Some(m) = init.get("model").and_then(|v| v.as_str()) {
-                    *self.model_name.lock().unwrap() = m.to_string();
-                }
-                if let Some(d) = init.get("dimension").and_then(|v| v.as_u64()) {
-                    *self.dimension.lock().unwrap() = d as usize;
+        for _ in 0..10 {
+            first_line.clear();
+            if reader.read_line(&mut first_line).is_err() || first_line.is_empty() {
+                break;
+            }
+            let trimmed = first_line.trim();
+            if trimmed.starts_with('{') {
+                if let Ok(init) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                    if init.get("status").and_then(|v| v.as_str()) == Some("ready") {
+                        *self.is_ready.lock().unwrap() = true;
+                        if let Some(m) = init.get("model").and_then(|v| v.as_str()) {
+                            *self.model_name.lock().unwrap() = m.to_string();
+                        }
+                        if let Some(d) = init.get("dimension").and_then(|v| v.as_u64()) {
+                            *self.dimension.lock().unwrap() = d as usize;
+                        }
+                    }
+                    break;
                 }
             }
         }
@@ -148,14 +156,20 @@ impl AiWorkerBridge {
         stdin.flush().map_err(|e| format!("Failed to flush worker stdin: {}", e))?;
 
         let mut resp_line = String::new();
-        reader.read_line(&mut resp_line).map_err(|e| format!("Failed to read worker response: {}", e))?;
-
-        let resp: WorkerResp = serde_json::from_str(&resp_line).map_err(|e| format!("Worker parse error: {}", e))?;
-        if resp.status == "ok" {
-            resp.vector.ok_or_else(|| "Worker returned empty vector".to_string())
-        } else {
-            Err(resp.error.unwrap_or_else(|| "Worker error".to_string()))
+        for _ in 0..10 {
+            resp_line.clear();
+            reader.read_line(&mut resp_line).map_err(|e| format!("Failed to read worker response: {}", e))?;
+            let trimmed = resp_line.trim();
+            if trimmed.starts_with('{') {
+                let resp: WorkerResp = serde_json::from_str(trimmed).map_err(|e| format!("Worker parse error: {}", e))?;
+                if resp.status == "ok" {
+                    return resp.vector.ok_or_else(|| "Worker returned empty vector".to_string());
+                } else {
+                    return Err(resp.error.unwrap_or_else(|| "Worker error".to_string()));
+                }
+            }
         }
+        Err("No valid response from worker".to_string())
     }
 
     pub fn embed_batch(&self, paths: &[String]) -> Result<Vec<(String, Option<Vec<f32>>)>, String> {
@@ -181,18 +195,24 @@ impl AiWorkerBridge {
         stdin.flush().map_err(|e| format!("Failed to flush worker stdin: {}", e))?;
 
         let mut resp_line = String::new();
-        reader.read_line(&mut resp_line).map_err(|e| format!("Failed to read worker response: {}", e))?;
-
-        let resp: WorkerResp = serde_json::from_str(&resp_line).map_err(|e| format!("Worker parse error: {}", e))?;
-        if resp.status == "ok" {
-            let items = resp.items.unwrap_or_default();
-            let mut results = Vec::new();
-            for item in items {
-                results.push((item.path, item.vector));
+        for _ in 0..10 {
+            resp_line.clear();
+            reader.read_line(&mut resp_line).map_err(|e| format!("Failed to read worker response: {}", e))?;
+            let trimmed = resp_line.trim();
+            if trimmed.starts_with('{') {
+                let resp: WorkerResp = serde_json::from_str(trimmed).map_err(|e| format!("Worker parse error: {}", e))?;
+                if resp.status == "ok" {
+                    let items = resp.items.unwrap_or_default();
+                    let mut results = Vec::new();
+                    for item in items {
+                        results.push((item.path, item.vector));
+                    }
+                    return Ok(results);
+                } else {
+                    return Err(resp.error.unwrap_or_else(|| "Worker error".to_string()));
+                }
             }
-            Ok(results)
-        } else {
-            Err(resp.error.unwrap_or_else(|| "Worker error".to_string()))
         }
+        Err("No valid response from worker".to_string())
     }
 }

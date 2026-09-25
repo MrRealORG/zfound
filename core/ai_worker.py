@@ -7,14 +7,20 @@ Communicates via JSON lines over stdin / stdout.
 
 import sys
 import os
+import io
 import json
 import time
+import logging
+import warnings
+import contextlib
 from pathlib import Path
 from PIL import Image
 
 # Ensure low CPU thread count for quiet background inference
 os.environ["OMP_NUM_THREADS"] = "2"
 os.environ["MKL_NUM_THREADS"] = "2"
+warnings.filterwarnings("ignore")
+logging.getLogger("transformers").setLevel(logging.ERROR)
 
 import torch
 torch.set_num_threads(2)
@@ -25,7 +31,17 @@ from transformers import CLIPModel, CLIPProcessor
 class VisionWorker:
     def __init__(self, models_dir: str = None):
         if not models_dir:
-            models_dir = str(Path(__file__).resolve().parent.parent.parent / "models")
+            candidates = [
+                Path(__file__).resolve().parent.parent.parent / "models",
+                Path(__file__).resolve().parent.parent / "models",
+                Path("e:/XFind_Pro/models"),
+            ]
+            for c in candidates:
+                if c.is_dir():
+                    models_dir = str(c)
+                    break
+            if not models_dir:
+                models_dir = "e:/XFind_Pro/models"
         self.models_dir = Path(models_dir)
         self.model = None
         self.processor = None
@@ -39,14 +55,18 @@ class VisionWorker:
             return False, f"Model path not found: {model_path}"
 
         try:
-            self.processor = CLIPProcessor.from_pretrained(str(model_path), local_files_only=True)
-            self.model = CLIPModel.from_pretrained(
-                str(model_path),
-                local_files_only=True,
-                dtype=torch.float32,
-                low_cpu_mem_usage=True
-            )
-            self.model.eval()
+            # Silence HuggingFace load reports from leaking into stdout
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+                self.processor = CLIPProcessor.from_pretrained(str(model_path), local_files_only=True)
+                self.model = CLIPModel.from_pretrained(
+                    str(model_path),
+                    local_files_only=True,
+                    dtype=torch.float32,
+                    low_cpu_mem_usage=True
+                )
+                self.model.eval()
+
             self.model_name = model_name
             self.dimension = 512
             self.is_ready = True
@@ -87,9 +107,9 @@ class VisionWorker:
 
 def main():
     worker = VisionWorker()
-    # Auto-load local clip model on startup
     success, msg = worker.load_clip("clip-vit-base-patch32")
-    # Output ready signal
+
+    # Output pure JSON ready signal
     ready_payload = {
         "status": "ready" if success else "error",
         "message": msg,
