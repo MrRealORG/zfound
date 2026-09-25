@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZFound × Zeeno Soft</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/png" href="../assets/icon_64.png">
+</head>
+<body class="apple-mono-theme">
+
+    <!-- Splash Screen -->
+    <div id="splash-screen" class="splash-container">
+        <div class="splash-card">
+            <div class="splash-icon-wrapper">
+                <img src="../assets/icon_256.png" alt="ZFound Icon" class="splash-icon">
+                <div class="splash-icon-glow"></div>
+            </div>
+            <div class="splash-brand">
+                <h1 class="splash-title">ZFound</h1>
+                <p class="splash-subtitle">Zeeno Soft</p>
+            </div>
+            <div class="splash-progress-track">
+                <div id="splash-progress-bar" class="splash-progress-bar"></div>
+            </div>
+            <p id="splash-status-text" class="splash-status">Initializing vision subsystems...</p>
+        </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div id="app-root" class="app-root hidden">
+        
+        <!-- Floating Glass Rounded Sidebar -->
+        <aside class="floating-glass-sidebar">
+            <div class="sidebar-top">
+                <div class="brand-pill" title="ZFound × Zeeno Soft v0.1">
+                    <img src="../assets/icon_64.png" alt="Logo" class="sidebar-logo">
+                </div>
+                
+                <nav class="sidebar-nav">
+                    <button class="nav-item active" data-view="finder" title="Image Finder & Library">
+                        <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <rect x="3" y="3" width="18" height="18" rx="4" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <path d="M21 15l-5-5L5 21" />
+                        </svg>
+                        <span class="nav-label">Library</span>
+                    </button>
+
+                    <button class="nav-item" data-view="search" title="Visual Similarity Finder">
+                        <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <circle cx="11" cy="11" r="8" />
+                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                            <path d="M11 8v6M8 11h6" />
+                        </svg>
+                        <span class="nav-label">Find Similar</span>
+                    </button>
+
+                    <button class="nav-item" data-view="models" title="Engine & Subsystem">
+                        <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                        </svg>
+                        <span class="nav-label">Engine</span>
+                    </button>
+                </nav>
+            </div>
+
+            <div class="sidebar-bottom">
+                <div class="model-badge-pill" id="sidebar-model-pill" title="Local Model Status">
+                    <span class="status-pulse-dot"></span>
+                    <span class="model-short-name" id="sidebar-model-name">Loading...</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="workspace-main">
+            
+            <!-- VIEW 1: Finder & Library -->
+            <section id="view-finder" class="view-panel active">
+                <header class="panel-header">
+                    <div class="header-left">
+                        <h2 class="view-heading">Image Library</h2>
+                        <p class="view-subheading" id="library-subheading">Select a folder to scan and index local visual memories</p>
+                    </div>
+                    <div class="header-actions">
+                        <button id="btn-select-folder" class="btn btn-secondary">
+                            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            <span>Select Folder</span>
+                        </button>
+
+                        <button id="btn-index-images" class="btn btn-primary" disabled>
+                            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                            </svg>
+                            <span>Index All</span>
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Library Toolbar / Stats -->
+                <div class="stats-strip">
+                    <div class="stat-cell">
+                        <span class="stat-label">Discovered</span>
+                        <span class="stat-value" id="stat-scanned-count">0</span>
+                    </div>
+                    <div class="stat-separator"></div>
+                    <div class="stat-cell">
+                        <span class="stat-label">Indexed</span>
+                        <span class="stat-value" id="stat-indexed-count">0</span>
+                    </div>
+                    <div class="stat-separator"></div>
+                    <div class="stat-cell folder-path-cell" title="Current folder">
+                        <span class="stat-label">Active Directory</span>
+                        <span class="stat-value-path" id="stat-folder-path">No folder selected</span>
+                    </div>
+                </div>
+
+                <!-- Indexing Progress Bar (Discreet) -->
+                <div id="index-progress-container" class="discreet-progress-wrap hidden">
+                    <div class="progress-info-row">
+                        <span id="index-progress-label">Indexing images...</span>
+                        <span id="index-progress-pct">0%</span>
+                    </div>
+                    <div class="discreet-progress-track">
+                        <div id="index-progress-bar" class="discreet-progress-fill"></div>
+                    </div>
+                </div>
+
+                <!-- Gallery Grid -->
+                <div class="gallery-scroll-container">
+                    <div id="gallery-grid" class="gallery-grid">
+                        <div class="empty-state">
+                            <div class="empty-icon-wrap">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <rect x="3" y="3" width="18" height="18" rx="4" />
+                                    <circle cx="8.5" cy="8.5" r="1.5" />
+                                    <path d="M21 15l-5-5L5 21" />
+                                </svg>
+                            </div>
+                            <h3>No Images Scanned</h3>
+                            <p>Choose a folder containing pictures to begin scanning.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 2: Visual Similarity Search -->
+            <section id="view-search" class="view-panel">
+                <header class="panel-header">
+                    <div class="header-left">
+                        <h2 class="view-heading">Find Similar</h2>
+                        <p class="view-subheading">Drop any image to search visually identical (100%) or semantically similar images</p>
+                    </div>
+                    <div class="header-actions">
+                        <div class="filter-pill">
+                            <span class="filter-label">Min Score</span>
+                            <input type="range" id="search-threshold" min="0" max="95" value="40" class="mini-slider">
+                            <span class="filter-val" id="search-threshold-val">40%</span>
+                        </div>
+                    </div>
+                </header>
+
+                <div class="search-layout">
+                    <!-- Query Input Dropzone -->
+                    <div class="query-dock">
+                        <div id="query-dropzone" class="query-dropzone">
+                            <input type="file" id="query-file-input" accept="image/*" class="hidden-input">
+                            <div class="dropzone-content" id="dropzone-placeholder">
+                                <div class="drop-circle-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                        <polyline points="17 8 12 3 7 8" />
+                                        <line x1="12" y1="3" x2="12" y2="15" />
+                                    </svg>
+                                </div>
+                                <h4>Drop Query Image</h4>
+                                <p>Drag and drop an image or <span class="accent-link">click to browse</span></p>
+                            </div>
+                            <div class="dropzone-preview hidden" id="dropzone-preview">
+                                <img id="query-img-element" src="" alt="Query Preview">
+                                <button id="btn-clear-query" class="btn-clear-dock" title="Clear query">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="query-status-card" id="query-status-card">
+                            <span class="status-indicator-dot"></span>
+                            <span id="query-status-text">Drop an image to begin matching</span>
+                        </div>
+                    </div>
+
+                    <!-- Search Results Grid -->
+                    <div class="results-pane">
+                        <div class="results-header-bar">
+                            <span class="results-title">Ranked Matches</span>
+                            <span class="results-count-badge" id="results-count-badge">0 results</span>
+                        </div>
+
+                        <div id="results-grid" class="results-grid">
+                            <div class="empty-state results-empty">
+                                <div class="empty-icon-wrap">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <circle cx="11" cy="11" r="8" />
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                    </svg>
+                                </div>
+                                <h3>Ready for Query</h3>
+                                <p>Drop an image in the dock to scan your indexed library for duplicates and visual lookalikes.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 3: Engine & Settings -->
+            <section id="view-models" class="view-panel">
+                <header class="panel-header">
+                    <div class="header-left">
+                        <h2 class="view-heading">Engine & Subsystems</h2>
+                        <p class="view-subheading">Active vision models, memory efficiency parameters, and runtime info</p>
+                    </div>
+                </header>
+
+                <div class="engine-cards-grid">
+                    <div class="glass-card">
+                        <div class="card-header">
+                            <span class="card-tag">Active Model</span>
+                            <h3 id="engine-active-model-title">Detecting...</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="info-row">
+                                <span class="info-key">Embedding Dimension:</span>
+                                <span class="info-val" id="engine-dim">0-D</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-key">Inference Device:</span>
+                                <span class="info-val">CPU (Low-Memory Inference)</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-key">Perceptual Hashing:</span>
+                                <span class="info-val">256-bit pHash + dHash</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-key">Exact Match Resolution:</span>
+                                <span class="info-val">100.0% Byte/Hash Parity</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass-card">
+                        <div class="card-header">
+                            <span class="card-tag">Detected Local Models</span>
+                            <h3>Local Storage</h3>
+                        </div>
+                        <div class="card-body" id="detected-models-list">
+                            <p class="text-muted">Scanning ./models/ directory...</p>
+                        </div>
+                    </div>
+
+                    <div class="glass-card">
+                        <div class="card-header">
+                            <span class="card-tag">About</span>
+                            <h3>ZFound v0.1</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="about-text">
+                                Designed by <strong>Zeeno Soft</strong>. Engineered for pure speed, minimal memory footprint, and distraction-free visual discovery.
+                            </p>
+                            <p class="about-subtext">
+                                Future updates will feature online HuggingFace model hub downloads and embedded OCR text indexing.
+                            </p>
+                        </div>
+                    <div class="glass-card full-width-card">
+                        <div class="card-header-row">
+                            <div>
+                                <span class="card-tag">Telemetry & Diagnostics</span>
+                                <h3>Live System & Engine Logs</h3>
+                            </div>
+                            <button id="btn-clear-logs" class="btn btn-secondary btn-sm">Clear Logs</button>
+                        </div>
+                        <div class="card-body">
+                            <div id="live-logs-terminal" class="terminal-box">
+                                <div class="log-line text-muted">[System] ZFound engine telemetry initialized...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Apple-style Lightbox Modal -->
+    <div id="lightbox-modal" class="lightbox-overlay hidden">
+        <div class="lightbox-backdrop"></div>
+        <div class="lightbox-dialog">
+            <button id="lightbox-close" class="lightbox-close-btn" title="Close">✕</button>
+            <div class="lightbox-img-wrap">
+                <img id="lightbox-img" src="" alt="Full preview">
+            </div>
+            <div class="lightbox-details">
+                <div class="lightbox-title-row">
+                    <h3 id="lightbox-filename">Image Name</h3>
+                    <span id="lightbox-score-badge" class="score-badge">100% Match</span>
+                </div>
+                <p id="lightbox-filepath" class="lightbox-path-text">/path/to/image</p>
+                <div class="lightbox-actions-row">
+                    <button id="lightbox-btn-open" class="btn btn-secondary btn-sm">Open File</button>
+                    <button id="lightbox-btn-reveal" class="btn btn-secondary btn-sm">Reveal in Explorer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Apple-style Toast Pill -->
+    <div id="toast-pill" class="toast-pill hidden">
+        <span id="toast-icon">✓</span>
+        <span id="toast-message">Notification</span>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
