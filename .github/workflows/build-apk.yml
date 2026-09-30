@@ -1,0 +1,80 @@
+name: Build ZFound Android APK
+
+on:
+  push:
+    paths:
+      - 'android/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Build & Package Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Ensure Gradle Wrapper Exists
+        working-directory: android
+        run: |
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Downloading gradle-wrapper.jar..."
+            mkdir -p gradle/wrapper
+            curl -sLo gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.4.0/gradle/wrapper/gradle-wrapper.jar
+          fi
+          chmod +x gradlew
+
+      - name: Build Debug APK with Gradle
+        working-directory: android
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Prepare APK for Release
+        run: |
+          mkdir -p release-apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk release-apk/zfound-camera.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zfound-camera-apk
+          path: release-apk/zfound-camera.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          tag_name: mobile-preview
+          name: "ZFound Mobile Camera App (APK)"
+          body: |
+            ### 📱 ZFound Mobile Companion App
+            
+            Download and install this APK on your Android phone to connect with ZFound on your PC over local Wi-Fi:
+            
+            - **`zfound-camera.apk`**: Direct Installable Android APK
+            
+            #### 🚀 Quick Start:
+            1. Download `zfound-camera.apk` directly to your Android device and install it.
+            2. Open ZFound on your PC and click **📱 Connect Phone**.
+            3. Open the app on your phone, tap **Scan QR Code**, and point it at the PC screen.
+            4. Start snapping product photos—they transfer instantly to your PC!
+          draft: false
+          prerelease: true
+          files: release-apk/zfound-camera.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
