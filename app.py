@@ -32,6 +32,9 @@ from core.indexer import FastIndexer
 from core.product_detector import ProductDetector
 from core.image_scaler import ImageScaler
 from core.sync_server import SyncServer
+from core.product_enhancer import BarcodeScanner, StudioOptimizer
+
+
 
 STORAGE_DIR = CURRENT_DIR / "storage"
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
@@ -69,7 +72,10 @@ class ZFoundApi:
         self._embedder = FastEmbedder(models_dir=find_models_dir())
         self._indexer = FastIndexer()
         self._detector = ProductDetector(models_dir=find_models_dir())
+        self._barcode_scanner = BarcodeScanner()
+        self._studio_optimizer = StudioOptimizer()
         self._scanned_items = []
+
         self._current_folder = ""
         self._metadata = {}  # {path_or_name: {"code": ..., "box": ..., "custom_name": ...}}
         self._is_indexing = False
@@ -1446,8 +1452,22 @@ class ZFoundApi:
                             enh_w, enh_h = w, h
                             model_label = "Original"
 
+                        # Automatic Barcode & QR Code Scanning on product packaging
+                        detected_barcode = None
+                        detected_type = None
+                        try:
+                            codes = self._barcode_scanner.scan_image(crop)
+                            if codes:
+                                detected_barcode = codes[0]["code"]
+                                detected_type = codes[0]["type"]
+                        except Exception:
+                            pass
+
                         prod["crop_path"] = str(crop_path).replace("\\", "/")
                         prod["raw_crop_path"] = str(raw_crop_path).replace("\\", "/")
+                        if detected_barcode:
+                            prod["barcode"] = detected_barcode
+                            prod["barcode_type"] = detected_type
 
                         all_crops.append({
                             "id": prod["id"],
@@ -1468,12 +1488,15 @@ class ZFoundApi:
                             "raw_crop_path": str(raw_crop_path).replace("\\", "/"),
                             "crop_b64": b64,
                             "name": prod.get("name") or f"Product {global_idx}",
-                            "code": prod.get("code") or f"ZF{str(global_idx).zfill(2)}",
+                            "code": prod.get("code") or detected_barcode or f"ZF{str(global_idx).zfill(2)}",
+                            "barcode": detected_barcode or "",
+                            "barcode_type": detected_type or "",
                             "box": prod.get("box") or default_box,
                             "notes": prod.get("notes", ""),
                             "source": prod.get("source", "ai")
                         })
                         global_idx += 1
+
             except Exception as e:
                 self.log(f"Error generating crops for {img_rec['name']}: {e}")
 
@@ -1611,7 +1634,149 @@ class ZFoundApi:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    def scan_crop_barcode(self, crop_path: str = None, base64_data: str = None):
+        """Scans an individual crop for 1D barcodes and 2D QR codes."""
+        try:
+            cv_img = None
+            if base64_data:
+                if "," in base64_data:
+                    base64_data = base64_data.split(",", 1)[1]
+                raw_bytes = base64.b64decode(base64_data)
+                cv_img = cv2.imdecode(np.frombuffer(raw_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+            elif crop_path:
+                p = Path(crop_path)
+                if p.exists():
+                    cv_img = cv2.imread(str(p))
+
+            if cv_img is None:
+                return {"status": "error", "message": "Cannot load image for barcode scan"}
+
+            codes = self._barcode_scanner.scan_image(cv_img)
+            best_code = codes[0]["code"] if codes else None
+            best_type = codes[0]["type"] if codes else None
+
+            return {
+                "status": "success",
+                "found": len(codes) > 0,
+                "best_code": best_code,
+                "best_type": best_type,
+                "codes": codes
+            }
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def scan_all_session_barcodes(self):
+        """Scans all crops in the active session for barcodes/QRs and auto-updates SKU codes."""
+        try:
+            sess = self.get_active_session()
+            updated_count = 0
+            results = []
+
+            for img in sess.get("images", []):
+                for prod in img.get("products", []):
+                    cpath = prod.get("crop_path")
+                    if cpath and Path(cpath).exists():
+                        codes = self._barcode_scanner.scan_image(cpath)
+                        if codes:
+                            prod["barcode"] = codes[0]["code"]
+                            prod["barcode_type"] = codes[0]["type"]
+                            # Only overwrite code if user hasn't explicitly customized it away from default
+                            if not prod.get("code") or prod["code"].startswith("ZF"):
+                                prod["code"] = codes[0]["code"]
+                                updated_count += 1
+                            results.append({
+                                "id": prod["id"],
+                                "code": prod["code"],
+                                "barcode": codes[0]["code"],
+                                "barcode_type": codes[0]["type"]
+                            })
+
+            self._save_session_autosave()
+            self.log(f"Auto-scanned barcodes on session crops: found {len(results)} codes")
+            return {
+                "status": "success",
+                "updated_count": updated_count,
+                "results": results
+            }
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def optimize_crop_studio(self, crop_path: str, mode: str = "studio"):
+        """
+        Applies 1-Click Studio Light & Color optimization to an individual product crop.
+        Neutralizes room lighting color cast, lifts dark shadows via CLAHE,
+        and sharpens label text and textures.
+        """
+        try:
+            p = Path(crop_path)
+            if not p.exists():
+                return {"status": "error", "message": "Crop not found"}
+
+            # Load from raw master if available to avoid multi-generation JPEG artifacts
+            raw_candidate = p.parent / p.name.replace("crop_", "crop_raw_").replace(".jpg", ".png")
+            source_path = raw_candidate if raw_candidate.exists() else p
+
+            cv_img = cv2.imread(str(source_path))
+            if cv_img is None:
+                return {"status": "error", "message": "Cannot read image"}
+
+            enhanced, metrics = self._studio_optimizer.optimize_lighting_and_contrast(
+                cv_img,
+                clahe_clip=2.2 if mode == "studio" else 3.0,
+                sharpen_strength=0.35,
+                vibrancy_boost=1.08
+            )
+
+            cv2.imwrite(str(p), enhanced, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            b64 = self._studio_optimizer.get_image_b64(enhanced, max_preview=480)
+            h, w = enhanced.shape[:2]
+
+            return {
+                "status": "success",
+                "crop_path": str(p).replace("\\", "/"),
+                "crop_b64": b64,
+                "width": w,
+                "height": h,
+                "metrics": metrics
+            }
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def optimize_all_session_crops(self, mode: str = "studio"):
+        """Applies Studio Light & Color optimization to all product crops in the session."""
+        try:
+            sess = self.get_active_session()
+            optimized_count = 0
+            results = []
+
+            for img in sess.get("images", []):
+                for prod in img.get("products", []):
+                    cpath = prod.get("crop_path")
+                    if cpath and Path(cpath).exists():
+                        res = self.optimize_crop_studio(cpath, mode=mode)
+                        if res.get("status") == "success":
+                            prod["crop_b64"] = res["crop_b64"]
+                            prod["studio_optimized"] = True
+                            optimized_count += 1
+                            results.append({
+                                "id": prod["id"],
+                                "crop_b64": res["crop_b64"],
+                                "width": res["width"],
+                                "height": res["height"]
+                            })
+
+            self._save_session_autosave()
+            self.log(f"Studio optimized {optimized_count} crops in active session")
+            return {
+                "status": "success",
+                "count": optimized_count,
+                "results": results
+            }
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     def save_inventory_products(self, products_data: list, target_folder: str = None):
+
         """
         Saves all confirmed products, writes individual crops into the user's selected/default
         image folder on disk, and records inventory in storage/inventory.json.

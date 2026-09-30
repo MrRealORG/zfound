@@ -335,6 +335,34 @@
                 return await window.pywebview.api.get_pending_mobile_events();
             }
             return [];
+        },
+
+        async scanCropBarcode(cropPath, base64Data = null) {
+            if (window.pywebview && window.pywebview.api) {
+                return await window.pywebview.api.scan_crop_barcode(cropPath, base64Data);
+            }
+            return { found: false, code: '' };
+        },
+
+        async scanAllSessionBarcodes() {
+            if (window.pywebview && window.pywebview.api) {
+                return await window.pywebview.api.scan_all_session_barcodes();
+            }
+            return { status: 'error', message: 'No backend bridge available' };
+        },
+
+        async optimizeCropStudio(cropPath, mode = 'balanced') {
+            if (window.pywebview && window.pywebview.api) {
+                return await window.pywebview.api.optimize_crop_studio(cropPath, mode);
+            }
+            return { status: 'error', message: 'No backend bridge available' };
+        },
+
+        async optimizeAllSessionCrops(mode = 'balanced') {
+            if (window.pywebview && window.pywebview.api) {
+                return await window.pywebview.api.optimize_all_session_crops(mode);
+            }
+            return { status: 'error', message: 'No backend bridge available' };
         }
     };
 
@@ -574,6 +602,9 @@
         canvasScalerSelect: document.getElementById('canvas-scaler-select'),
         scalerModelSelect: document.getElementById('scaler-model-select'),
         btnUpscaleAll: document.getElementById('btn-upscale-all'),
+        btnScanAllBarcodes: document.getElementById('btn-scan-all-barcodes'),
+        studioModeSelect: document.getElementById('studio-mode-select'),
+        btnStudioAll: document.getElementById('btn-studio-all'),
         btnSaveInventory: document.getElementById('btn-save-inventory'),
         labelSaveInventory: document.getElementById('label-save-inventory'),
         autosaveStatus: document.getElementById('autosave-status'),
@@ -2132,6 +2163,7 @@
                     <img src="${crop.crop_b64 || ''}" alt="${escapeHtml(crop.name)}" class="crop-preview-img">
                     <span class="crop-badge ${isManual ? 'manual' : 'ai'}">${isManual ? 'Manual Cut' : 'AI'}</span>
                     ${isHd ? `<span class="hd-badge" title="AI Model: ${escapeHtml(modelBadge)}">✨ ${escapeHtml(modelBadge)} • ${dimText}</span>` : ''}
+                    ${crop.barcode ? `<span class="barcode-badge" title="Barcode (${escapeHtml(crop.barcode_type || '1D/2D')}): ${escapeHtml(crop.barcode)}">🏷️ ${escapeHtml(crop.barcode)}</span>` : ''}
                 </div>
                 <div class="crop-details-form">
                     <div class="meta-field-row">
@@ -2159,6 +2191,14 @@
                             <button class="btn-secondary-micro btn-enhance-crop" title="Re-enhance with selected AI model">
                                 <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                                 <span>Enhance</span>
+                            </button>
+                            <button class="btn-secondary-micro btn-scan-barcode-crop" title="Scan package for Barcode / QR Code">
+                                <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;"><line x1="4" y1="6" x2="4" y2="18"/><line x1="8" y1="6" x2="8" y2="18"/><line x1="12" y1="6" x2="12" y2="18"/><line x1="17" y1="6" x2="17" y2="18"/><line x1="20" y1="6" x2="20" y2="18"/></svg>
+                                <span>Scan</span>
+                            </button>
+                            <button class="btn-secondary-micro btn-studio-crop" title="Optimize studio lighting & colors">
+                                <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                                <span>Studio</span>
                             </button>
                         </div>
                         <button class="btn-del-crop btn-danger-outline btn-micro" title="Discard this product">Discard</button>
@@ -2190,7 +2230,7 @@
 
             // Click crop preview to inspect in viewer modal
             card.querySelector('.crop-preview-wrap').addEventListener('click', (e) => {
-                if (e.target.closest('.btn-retake-crop') || e.target.closest('.btn-enhance-crop')) return;
+                if (e.target.closest('.btn-retake-crop') || e.target.closest('.btn-enhance-crop') || e.target.closest('.btn-scan-barcode-crop') || e.target.closest('.btn-studio-crop')) return;
                 openProductViewer(crops, idx);
             });
 
@@ -2251,6 +2291,40 @@
                     showToast(`Enhanced with ${res.model_name} to ${res.width}×${res.height} px!`, '✨');
                 } else {
                     showToast('Enhancement failed', '⚠️');
+                }
+            });
+
+            // Single Product Scan Barcode / QR Code
+            card.querySelector('.btn-scan-barcode-crop').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                showToast('Scanning crop for Barcodes & QR codes...', '🔍');
+                const res = await Bridge.scanCropBarcode(crop.crop_path, crop.crop_b64);
+                if (res && res.found) {
+                    crop.barcode = res.code;
+                    crop.barcode_type = res.type;
+                    if (!crop.code || crop.code.startsWith('ZF') || crop.code === `Product ${crop.product_index}`) {
+                        crop.code = res.code;
+                    }
+                    renderProductReviewGrid();
+                    showToast(`Found ${res.type}: ${res.code}`, '🏷️');
+                } else {
+                    showToast('No barcode or QR code detected on this crop', 'ℹ️');
+                }
+            });
+
+            // Single Product Studio Lighting & Color Fix
+            card.querySelector('.btn-studio-crop').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!crop.crop_path) return;
+                const mode = elements.studioModeSelect?.value || 'balanced';
+                showToast(`Applying ${mode} studio lighting & color fix...`, '💡');
+                const res = await Bridge.optimizeCropStudio(crop.crop_path, mode);
+                if (res && res.status === 'success') {
+                    crop.crop_b64 = res.crop_b64;
+                    renderProductReviewGrid();
+                    showToast('Studio lighting & color balanced!', '💡');
+                } else {
+                    showToast(res ? res.message : 'Studio fix failed', '⚠️');
                 }
             });
 
@@ -3192,6 +3266,79 @@
 
         if (elements.btnUpscaleAll) {
             elements.btnUpscaleAll.addEventListener('click', upscaleAllCrops);
+        }
+
+        // Review Toolbar: Scan All Barcodes
+        const scanAllBarcodes = async () => {
+            const crops = state.scanner.crops || [];
+            if (crops.length === 0) {
+                showToast('No products in review grid', '⚠️');
+                return;
+            }
+
+            if (elements.btnScanAllBarcodes) elements.btnScanAllBarcodes.disabled = true;
+            showToast(`Scanning ${crops.length} product crops for Barcodes & QR codes...`, '🔍');
+
+            try {
+                const res = await Bridge.scanAllSessionBarcodes();
+                if (res && res.status === 'success') {
+                    if (res.session && res.session.crops) {
+                        state.scanner.crops = res.session.crops;
+                    } else if (res.crops) {
+                        state.scanner.crops = res.crops;
+                    }
+                    renderProductReviewGrid();
+                    showToast(`Scan complete: found ${res.found_count || 0} barcodes!`, '🏷️');
+                } else {
+                    showToast(res ? res.message : 'Barcode scan failed', '⚠️');
+                }
+            } catch (err) {
+                console.error('[ZFound] Barcode scan error:', err);
+                showToast('Barcode scan encountered an error', '⚠️');
+            } finally {
+                if (elements.btnScanAllBarcodes) elements.btnScanAllBarcodes.disabled = false;
+            }
+        };
+
+        if (elements.btnScanAllBarcodes) {
+            elements.btnScanAllBarcodes.addEventListener('click', scanAllBarcodes);
+        }
+
+        // Review Toolbar: Studio Lighting & Color Fix All
+        const studioAllCrops = async () => {
+            const crops = state.scanner.crops || [];
+            if (crops.length === 0) {
+                showToast('No products in review grid', '⚠️');
+                return;
+            }
+
+            const mode = elements.studioModeSelect?.value || 'balanced';
+            if (elements.btnStudioAll) elements.btnStudioAll.disabled = true;
+            showToast(`Optimizing lighting & color (${mode}) for ${crops.length} crops...`, '💡');
+
+            try {
+                const res = await Bridge.optimizeAllSessionCrops(mode);
+                if (res && res.status === 'success') {
+                    if (res.session && res.session.crops) {
+                        state.scanner.crops = res.session.crops;
+                    } else if (res.crops) {
+                        state.scanner.crops = res.crops;
+                    }
+                    renderProductReviewGrid();
+                    showToast(`Studio lighting & colors optimized for ${res.count || crops.length} crops!`, '💡');
+                } else {
+                    showToast(res ? res.message : 'Studio fix failed', '⚠️');
+                }
+            } catch (err) {
+                console.error('[ZFound] Studio optimize error:', err);
+                showToast('Studio optimization encountered an error', '⚠️');
+            } finally {
+                if (elements.btnStudioAll) elements.btnStudioAll.disabled = false;
+            }
+        };
+
+        if (elements.btnStudioAll) {
+            elements.btnStudioAll.addEventListener('click', studioAllCrops);
         }
 
         // Save to Inventory

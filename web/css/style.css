@@ -2582,6 +2582,19 @@ body {
     color: #f1f5f9;
 }
 
+.studio-select-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.studio-select-wrap .toolbar-select {
+    min-width: 175px;
+    background: #1e293b;
+    border-color: rgba(245, 158, 11, 0.35);
+    color: #f1f5f9;
+}
+
 .hd-status-pill {
     display: inline-flex;
     align-items: center;
@@ -2622,10 +2635,34 @@ body {
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
+.barcode-badge {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 5px;
+    z-index: 2;
+    background: rgba(14, 165, 233, 0.25);
+    border: 1px solid rgba(56, 189, 248, 0.5);
+    color: #38bdf8;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    max-width: 88%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .crop-footer-left {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
+    flex-wrap: wrap;
 }
 
 .btn-secondary-micro {
