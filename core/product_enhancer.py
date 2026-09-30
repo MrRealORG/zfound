@@ -114,6 +114,16 @@ class BarcodeScanner:
                 # Exit early once codes are found to maximize performance
                 break
 
+        # Fallback to Neural OCR text detection if no 1D/2D barcode was found
+        if not results:
+            try:
+                ocr_reader = CodeOcrReader()
+                ocr_res = ocr_reader.read_crop_code(cv_img)
+                if ocr_res:
+                    results.append(ocr_res)
+            except Exception:
+                pass
+
         return results
 
     def _load_cv2_image(self, img_input) -> Optional[np.ndarray]:
@@ -242,3 +252,243 @@ class StudioOptimizer:
             b64 = base64.b64encode(buf.tobytes()).decode("ascii")
             return f"data:image/jpeg;base64,{b64}"
         return ""
+
+
+class CodeOcrReader:
+    """
+    High-Speed Neural OCR Reader for product numbers, SKU labels, and compartment codes.
+    Powered by RapidOCR (ONNX Runtime, CPU-optimized, ~100-200ms per image).
+    Specifically designed for physical trays, packaging boxes, and sample molds
+    with numbers/codes written above or beside each item slot.
+    """
+    def __init__(self):
+        self._engine = None
+        self._available = False
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+            self._engine = RapidOCR()
+            self._available = True
+        except Exception:
+            self._available = False
+
+    @property
+    def is_available(self) -> bool:
+        return self._available and self._engine is not None
+
+    def read_tray_codes(self, image_input: Union[str, Path, np.ndarray, Image.Image], products: List[Dict]) -> Tuple[List[Dict], int]:
+        """
+        Scans tray image for handwritten/printed codes and spatially maps them
+        to the corresponding products in the grid.
+        Also interpolates sequential series for missing slots in rows.
+        """
+        if not self.is_available or not products:
+            return products, 0
+
+        cv_img = self._load_cv2_image(image_input)
+        if cv_img is None or cv_img.size == 0:
+            return products, 0
+
+        try:
+            ocr_results, _ = self._engine(cv_img)
+        except Exception:
+            return products, 0
+
+        if not ocr_results:
+            return products, 0
+
+        # Parse text candidates
+        candidates = []
+        for box, text, score in ocr_results:
+            raw_text = str(text).strip()
+            conf = float(score)
+            if not raw_text or conf < 0.40:
+                continue
+
+            # Skip common UI overlay texts if present
+            if any(raw_text.lower().startswith(prefix) for prefix in ["product", "manual", "ai", "lanczos", "rate", "select"]):
+                continue
+
+            cleaned_tokens = self._clean_sku_tokens(raw_text)
+            if not cleaned_tokens:
+                continue
+
+            xs = [pt[0] for pt in box]
+            ys = [pt[1] for pt in box]
+            box_w = max(xs) - min(xs)
+            cy = sum(ys) / 4.0
+            num_tok = len(cleaned_tokens)
+
+            for i, tok in enumerate(cleaned_tokens):
+                cx = min(xs) + (i + 0.5) * (box_w / num_tok)
+                candidates.append({
+                    "text": tok,
+                    "raw": raw_text,
+                    "cx": cx,
+                    "cy": cy,
+                    "conf": conf
+                })
+
+        if not candidates:
+            return products, 0
+
+        # Group products into approximate rows by average Y coordinate
+        sorted_prods = sorted(products, key=lambda p: (p.get("y", 0), p.get("x", 0)))
+        rows = []
+        for p in sorted_prods:
+            py = p.get("y", 0)
+            placed = False
+            for r in rows:
+                avg_y = sum(item.get("y", 0) for item in r) / len(r)
+                if abs(avg_y - py) < 75:
+                    r.append(p)
+                    placed = True
+                    break
+            if not placed:
+                rows.append([p])
+
+        matched_count = 0
+
+        # Step 1: 1-to-1 Spatial Matching per row (locate number directly above product)
+        matched_candidate_indices = set()
+        for row in rows:
+            row.sort(key=lambda p: p.get("x", 0))
+            pair_dists = []
+            for p_idx, p in enumerate(row):
+                px = p.get("x", 0)
+                py = p.get("y", 0)
+                pw = p.get("width", 50)
+                ph = p.get("height", 50)
+                p_cx = px + pw / 2.0
+
+                for c_idx, c in enumerate(candidates):
+                    dx = abs(c["cx"] - p_cx)
+                    dy = py - c["cy"]
+                    if -35 <= dy <= ph * 1.15 and dx <= pw * 0.95:
+                        dist = dx * 1.2 + abs(dy - 40)
+                        pair_dists.append((dist, p_idx, c_idx))
+
+            pair_dists.sort(key=lambda x: x[0])
+            used_prods = set()
+            for dist, p_idx, c_idx in pair_dists:
+                if p_idx in used_prods or c_idx in matched_candidate_indices:
+                    continue
+                c = candidates[c_idx]
+                p = row[p_idx]
+                p["code"] = c["text"]
+                p["barcode"] = c["text"]
+                p["barcode_type"] = "OCR"
+                p["name"] = f"Item {c['text']}"
+                p["ocr_detected"] = True
+                used_prods.add(p_idx)
+                matched_candidate_indices.add(c_idx)
+                matched_count += 1
+
+            # Step 2: Intelligent sequence gap-filling along rows
+            self._interpolate_row_sequence(row)
+
+        # Step 3: Extrapolate rows with missing OCR headers (e.g. Row 1 before Row 2)
+        for r_idx in range(len(rows)):
+            row = rows[r_idx]
+            has_code = any(p.get("code") and not str(p.get("code")).startswith("ZF") for p in row)
+            if not has_code and r_idx + 1 < len(rows):
+                next_row = rows[r_idx + 1]
+                next_codes = [int(p["code"]) for p in next_row if str(p.get("code", "")).isdigit() and len(str(p.get("code", ""))) == 5]
+                if next_codes:
+                    next_base = next_codes[0]
+                    row_len = len(row)
+                    row_base = next_base - row_len
+                    for idx, p in enumerate(row):
+                        val_str = str(row_base + idx)
+                        p["code"] = val_str
+                        p["barcode"] = val_str
+                        p["barcode_type"] = "OCR / Seq"
+                        p["name"] = f"Item {val_str}"
+                        matched_count += 1
+
+        return products, matched_count
+
+    def _interpolate_row_sequence(self, row: List[Dict]):
+        """Fills missing product numbers if items in a row form a sequential series."""
+        if len(row) < 2:
+            return
+
+        digits_indices = []
+        for idx, p in enumerate(row):
+            code = str(p.get("code", "")).strip()
+            if code.isdigit() and len(code) == 5:
+                digits_indices.append((idx, int(code), len(code)))
+
+        if len(digits_indices) < 2:
+            return
+
+        base_idx, base_val, pad = digits_indices[0]
+        for idx, p in enumerate(row):
+            expected_val = base_val + (idx - base_idx)
+            expected_str = str(expected_val).zfill(pad)
+            curr_code = str(p.get("code", "")).strip()
+            if not p.get("ocr_detected") or not (curr_code.isdigit() and abs(int(curr_code) - expected_val) <= 1):
+                p["code"] = expected_str
+                p["barcode"] = expected_str
+                p["barcode_type"] = "OCR / Seq"
+                p["name"] = f"Item {expected_str}"
+
+    def read_crop_code(self, crop_input: Union[str, Path, np.ndarray, Image.Image]) -> Optional[Dict[str, str]]:
+        """Reads code from an individual crop."""
+        if not self.is_available:
+            return None
+        cv_img = self._load_cv2_image(crop_input)
+        if cv_img is None or cv_img.size == 0:
+            return None
+        try:
+            results, _ = self._engine(cv_img)
+            if results:
+                for box, text, score in results:
+                    tokens = self._clean_sku_tokens(str(text))
+                    if tokens and float(score) >= 0.40:
+                        return {"code": tokens[0], "type": "OCR", "confidence": float(score)}
+        except Exception:
+            pass
+        return None
+
+    @classmethod
+    def _clean_sku_tokens(cls, raw: str) -> List[str]:
+        import re
+        t = raw.strip()
+        t = re.sub(r'[\'\"`,.:;~|/\\]', '', t).strip()
+
+        # Check for merged numbers like '0535110536' or '1049310494'
+        merged = re.findall(r'(?:1[0-9DOoB86][0-9S]{3}|0[0-9S]{3,4}|[0-9]{4,5})', t)
+        tokens = merged if len(merged) > 1 else [t]
+
+        cleaned_list = []
+        for tok in tokens:
+            sub = tok
+            if re.match(r'^[1Il][0-9DOoB86][0-9S]{3}$', sub):
+                rest = sub[2:].replace('S', '5').replace('s', '5').replace('O', '0').replace('D', '0').replace('o', '0')
+                sub = '10' + rest
+            elif re.match(r'^0[0-9S]{3,4}$', sub):
+                rest = sub[1:].replace('S', '5').replace('s', '5').replace('O', '0')
+                if len(rest) == 3:
+                    sub = '10' + rest
+                elif len(rest) == 4 and rest.startswith('5'):
+                    sub = '10' + rest[1:]
+            elif re.match(r'^[1Il][0-9DOoB86][0-9S]{2}$', sub):
+                sub = '10' + sub[2:].replace('S', '5').replace('s', '5').replace('O', '0')
+            elif sub.isdigit():
+                pass
+            if re.search(r'[A-Za-z0-9]{2,12}', sub):
+                cleaned_list.append(sub)
+        return cleaned_list
+
+    def _load_cv2_image(self, img_input) -> Optional[np.ndarray]:
+        if isinstance(img_input, np.ndarray):
+            return img_input
+        elif isinstance(img_input, Image.Image):
+            rgb = img_input.convert("RGB")
+            return cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2BGR)
+        elif isinstance(img_input, (str, Path)):
+            p = str(img_input)
+            if not Path(p).exists():
+                return None
+            return cv2.imread(p)
+        return None

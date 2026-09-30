@@ -451,7 +451,7 @@
                             </svg>
                             <span>Upload Images</span>
                         </button>
-                        <input type="file" id="scanner-file-input" multiple accept="image/*" class="hidden-input">
+                        <input type="file" id="scanner-file-input" multiple accept="image/*" class="hidden-input" style="display: none !important;">
 
                         <button id="btn-connect-phone" class="btn btn-secondary" title="Connect Android phone over Wi-Fi to snap photos wirelessly">
                             <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -462,9 +462,16 @@
                             <span id="badge-phone-status" class="phone-status-dot offline" title="Phone Connection Status"></span>
                         </button>
 
-                        <div class="canvas-scaler-select-wrap" style="display:inline-flex; align-items:center; gap:6px; margin-right:4px;">
-                            <span style="font-size:11px; font-weight:600; color:var(--text-muted);">Upscaler:</span>
-                            <select id="canvas-scaler-select" class="toolbar-select" style="padding:4px 8px; font-size:11px;" title="Select AI super-resolution model for generated crops">
+                        <button id="btn-ocr-tray" class="btn btn-secondary" title="Read handwritten/printed tray codes and product numbers with AI OCR">
+                            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 7V4h16v3M9 20h6M12 4v16"/>
+                            </svg>
+                            <span>Read Codes (OCR)</span>
+                        </button>
+
+                        <div class="canvas-scaler-select-wrap">
+                            <span class="scaler-mini-label">Upscaler:</span>
+                            <select id="canvas-scaler-select" class="toolbar-select canvas-scaler-select" title="Select AI super-resolution model for generated crops">
                                 <option value="realesrgan" selected>🤖 Real-ESRGAN AI 4x (Studio)</option>
                                 <option value="fsrcnn">⚡ FSRCNN Neural 4x (Fast)</option>
                                 <option value="espcn">⚡ ESPCN Neural 4x (Sub-Pixel)</option>
@@ -472,7 +479,7 @@
                             </select>
                         </div>
 
-                        <button id="btn-scanner-next" class="btn btn-primary" disabled title="Generate individual product crops and review">
+                        <button id="btn-scanner-next" class="btn btn-primary btn-scanner-next-btn" disabled title="Generate individual product crops and review">
                             <span>Next: Review Products</span>
                             <span id="badge-next-count" class="btn-badge-count">0</span>
                             <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

@@ -363,6 +363,13 @@
                 return await window.pywebview.api.optimize_all_session_crops(mode);
             }
             return { status: 'error', message: 'No backend bridge available' };
+        },
+
+        async readSessionWrittenCodes(imageId = null) {
+            if (window.pywebview && window.pywebview.api) {
+                return await window.pywebview.api.read_session_written_codes(imageId);
+            }
+            return { status: 'error', message: 'No backend bridge available' };
         }
     };
 
@@ -561,6 +568,7 @@
         scannerFileInput: document.getElementById('scanner-file-input'),
         btnConnectPhone: document.getElementById('btn-connect-phone'),
         badgePhoneStatus: document.getElementById('badge-phone-status'),
+        btnOcrTray: document.getElementById('btn-ocr-tray'),
         btnScannerNext: document.getElementById('btn-scanner-next'),
         badgeNextCount: document.getElementById('badge-next-count'),
         sessionThumbsStrip: document.getElementById('session-thumbs-strip'),
@@ -1946,27 +1954,30 @@
             rect.setAttribute('vector-effect', 'non-scaling-stroke');
             g.appendChild(rect);
 
-            // Label pill
-            const labelText = `Product ${p.product_index}${isManual ? ' (Manual)' : ''}`;
-            const labelWidth = Math.max(90, labelText.length * 8 + 16);
-            const labelY = Math.max(0, p.y - 24);
+            // Label pill - compact & shows detected code (e.g. 10490) or compact #index so it never collides or hides handwriting
+            const hasDetectedCode = p.code && !p.code.startsWith('ZF') && p.code !== `Product ${p.product_index}`;
+            const labelText = hasDetectedCode
+                ? `${p.code}${isManual ? ' ✂' : ''}`
+                : `#${p.product_index}${isManual ? ' ✂' : ''}`;
+            const labelWidth = Math.max(30, labelText.length * 7.5 + 8);
+            const labelY = Math.max(0, p.y - 18);
 
             const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
             labelBg.setAttribute('class', 'box-label-bg svg-bbox-label-bg');
             labelBg.setAttribute('x', p.x);
             labelBg.setAttribute('y', labelY);
             labelBg.setAttribute('width', labelWidth);
-            labelBg.setAttribute('height', '22');
-            labelBg.setAttribute('rx', '4');
+            labelBg.setAttribute('height', '18');
+            labelBg.setAttribute('rx', '3');
             labelBg.setAttribute('fill', isManual ? '#0ea5e9' : '#10b981');
             g.appendChild(labelBg);
 
             const labelTextEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             labelTextEl.setAttribute('class', 'box-label-text svg-bbox-label-text');
-            labelTextEl.setAttribute('x', p.x + 8);
-            labelTextEl.setAttribute('y', labelY + 15);
+            labelTextEl.setAttribute('x', p.x + 4);
+            labelTextEl.setAttribute('y', labelY + 13);
             labelTextEl.setAttribute('fill', '#000000');
-            labelTextEl.setAttribute('font-size', '11');
+            labelTextEl.setAttribute('font-size', '10.5');
             labelTextEl.setAttribute('font-weight', '700');
             labelTextEl.setAttribute('font-family', 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif');
             labelTextEl.textContent = labelText;
@@ -2019,17 +2030,26 @@
             rect.setAttribute('height', p.height);
         }
 
-        const labelY = Math.max(0, p.y - 24);
+        const hasDetectedCode = p.code && !p.code.startsWith('ZF') && p.code !== `Product ${p.product_index}`;
+        const labelText = hasDetectedCode
+            ? `${p.code}${p.source === 'manual' ? ' ✂' : ''}`
+            : `#${p.product_index}${p.source === 'manual' ? ' ✂' : ''}`;
+        const labelWidth = Math.max(30, labelText.length * 7.5 + 8);
+        const labelY = Math.max(0, p.y - 18);
+
         const labelBg = g.querySelector('.box-label-bg');
         if (labelBg) {
             labelBg.setAttribute('x', p.x);
             labelBg.setAttribute('y', labelY);
+            labelBg.setAttribute('width', labelWidth);
+            labelBg.setAttribute('height', '18');
         }
 
         const labelTextEl = g.querySelector('.box-label-text');
         if (labelTextEl) {
-            labelTextEl.setAttribute('x', p.x + 8);
-            labelTextEl.setAttribute('y', labelY + 15);
+            labelTextEl.setAttribute('x', p.x + 4);
+            labelTextEl.setAttribute('y', labelY + 13);
+            labelTextEl.textContent = labelText;
         }
 
         const handles = [
@@ -2089,10 +2109,13 @@
             itemEl.dataset.productId = p.id;
 
             const isManual = p.source === 'manual';
+            const titleHtml = p.code 
+                ? `<strong style="color:var(--accent-primary, #0ea5e9); font-weight:700;">${escapeHtml(p.code)}</strong> <span style="font-size:11px; opacity:0.75;">(#${p.product_index})</span>`
+                : `Product ${p.product_index}`;
             itemEl.innerHTML = `
                 <div class="detection-info detected-prod-left">
                     <span class="detection-badge detected-prod-badge ${isManual ? 'manual badge-manual' : 'ai badge-ai'}">${isManual ? 'Manual Cut' : 'AI'}</span>
-                    <span class="detection-title">Product ${p.product_index}</span>
+                    <span class="detection-title">${titleHtml}</span>
                     <span class="detection-dims">${Math.round(p.width)}×${Math.round(p.height)}px</span>
                 </div>
                 <button class="btn-del-prod" title="Delete product">✕</button>
@@ -3101,6 +3124,41 @@
         if (elements.scalerModelSelect) {
             elements.scalerModelSelect.addEventListener('change', (e) => {
                 if (elements.canvasScalerSelect) elements.canvasScalerSelect.value = e.target.value;
+            });
+        }
+
+        // On-demand AI OCR for handwritten/printed codes on tray
+        if (elements.btnOcrTray) {
+            elements.btnOcrTray.addEventListener('click', async () => {
+                if (!state.scanner.activeImage) {
+                    showToast('No active scan image to read codes from', '⚠️');
+                    return;
+                }
+                const imgId = state.scanner.activeImage.id;
+                showToast('AI OCR: Reading handwritten/printed numbers on tray...', '⚡');
+                const origHtml = elements.btnOcrTray.innerHTML;
+                elements.btnOcrTray.disabled = true;
+                elements.btnOcrTray.innerHTML = `<span class="spinner-small" style="width:13px;height:13px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;display:inline-block;animation:spin 0.8s linear infinite;"></span> Reading...`;
+                try {
+                    const res = await Bridge.readSessionWrittenCodes(imgId);
+                    if (res && res.status === 'success') {
+                        state.scanner.activeSession = res.session;
+                        state.scanner.activeImage = res.session.images.find(im => im.id === imgId) || res.session.images[0] || null;
+                        renderSvgBoxes();
+                        renderDetectionsList();
+                        renderSessionThumbs();
+                        updateSafetyStats();
+                        showToast(res.message || 'Detected written codes!', '⚡');
+                    } else {
+                        showToast(res ? res.message : 'OCR reading failed', '⚠️');
+                    }
+                } catch (err) {
+                    console.error('[ZFound] Tray OCR error:', err);
+                    showToast('OCR error: ' + (err.message || err), '⚠️');
+                } finally {
+                    elements.btnOcrTray.disabled = false;
+                    elements.btnOcrTray.innerHTML = origHtml;
+                }
             });
         }
 

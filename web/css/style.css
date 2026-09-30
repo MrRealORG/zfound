@@ -319,9 +319,11 @@ body {
 .panel-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-end;
-    margin-bottom: 20px;
+    align-items: center;
+    margin-bottom: 18px;
     flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: 14px;
 }
 
 .view-heading {
@@ -329,6 +331,7 @@ body {
     font-weight: 600;
     letter-spacing: -0.6px;
     color: var(--text-primary);
+    white-space: nowrap;
 }
 
 .view-subheading {
@@ -340,7 +343,9 @@ body {
 .header-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
 }
 
 .active-mode {
@@ -1851,21 +1856,73 @@ body {
 /* ========================================================
    PRODUCT SCANNER & CANVAS STYLES
    ======================================================== */
+.hidden-input, input[type="file"].hidden-input {
+    display: none !important;
+    position: absolute !important;
+    width: 0 !important;
+    height: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
 .scanner-title-row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    flex-wrap: nowrap;
 }
 
 .badge-tag-pico {
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(5, 150, 105, 0.22));
-    border: 1px solid rgba(16, 185, 129, 0.35);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(5, 150, 105, 0.25));
+    border: 1px solid rgba(16, 185, 129, 0.4);
     color: #34d399;
     font-size: 11px;
     font-weight: 600;
-    padding: 3px 9px;
+    padding: 3px 10px;
     border-radius: 999px;
     letter-spacing: 0.3px;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+}
+
+.canvas-scaler-select-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 3px 8px;
+    flex-shrink: 0;
+}
+
+.scaler-mini-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.canvas-scaler-select {
+    padding: 4px 6px;
+    font-size: 11px;
+    min-width: 155px;
+    background: transparent;
+    border: none;
+    color: #fff;
+    outline: none;
+    cursor: pointer;
+}
+
+.btn-scanner-next-btn {
+    min-width: 185px !important;
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+    font-weight: 600 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
 }
 
 .btn-badge-count {
@@ -1876,6 +1933,7 @@ body {
     padding: 1px 7px;
     border-radius: 999px;
     margin-left: 4px;
+    flex-shrink: 0;
 }
 
 .btn-primary .btn-badge-count {

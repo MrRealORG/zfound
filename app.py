@@ -32,7 +32,7 @@ from core.indexer import FastIndexer
 from core.product_detector import ProductDetector
 from core.image_scaler import ImageScaler
 from core.sync_server import SyncServer
-from core.product_enhancer import BarcodeScanner, StudioOptimizer
+from core.product_enhancer import BarcodeScanner, StudioOptimizer, CodeOcrReader
 
 
 
@@ -74,6 +74,7 @@ class ZFoundApi:
         self._detector = ProductDetector(models_dir=find_models_dir())
         self._barcode_scanner = BarcodeScanner()
         self._studio_optimizer = StudioOptimizer()
+        self._ocr_reader = CodeOcrReader()
         self._scanned_items = []
 
         self._current_folder = ""
@@ -1024,6 +1025,15 @@ class ZFoundApi:
                         "user_locked": False
                     })
 
+                # Auto-detect handwritten / printed tray compartment codes with Neural OCR
+                try:
+                    if self._ocr_reader and self._ocr_reader.is_available:
+                        products, ocr_found = self._ocr_reader.read_tray_codes(img_cv, products)
+                        if ocr_found > 0:
+                            self.log(f"Auto-detected {ocr_found} written tray codes with AI OCR on {p.name}")
+                except Exception as ocr_err:
+                    self.log(f"Tray OCR auto-detection error: {ocr_err}")
+
                 # Thumbnails: small 160px for strip, compact 1200px for canvas
                 thumb_url = self.get_thumbnail_b64(str(p), max_size=160)
                 data_url = self.get_thumbnail_b64(str(p), max_size=1200)
@@ -1206,6 +1216,15 @@ class ZFoundApi:
                     "user_locked": False
                 })
 
+            # Auto-detect handwritten / printed tray compartment codes
+            try:
+                if self._ocr_reader and self._ocr_reader.is_available:
+                    products, ocr_found = self._ocr_reader.read_tray_codes(img_cv, products)
+                    if ocr_found > 0:
+                        self.log(f"Retake: Auto-detected {ocr_found} written codes with AI OCR")
+            except Exception as ocr_err:
+                self.log(f"Retake tray OCR error: {ocr_err}")
+
             thumb_url = self.get_thumbnail_b64(resolved_path, max_size=160)
             data_url = self.get_thumbnail_b64(resolved_path, max_size=1200)
 
@@ -1286,6 +1305,15 @@ class ZFoundApi:
                     })
                     start_idx += 1
                     new_discovered += 1
+
+            # Auto-detect handwritten / printed tray compartment codes on re-analyzed products
+            try:
+                if self._ocr_reader and self._ocr_reader.is_available:
+                    new_products, ocr_found = self._ocr_reader.read_tray_codes(img_cv, new_products)
+                    if ocr_found > 0:
+                        self.log(f"Re-analyze: Auto-detected {ocr_found} written codes with AI OCR")
+            except Exception as ocr_err:
+                self.log(f"Re-analyze tray OCR error: {ocr_err}")
 
             target_img["products"] = new_products
             self._save_session_autosave()
@@ -1699,6 +1727,48 @@ class ZFoundApi:
                 "results": results
             }
         except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def read_session_written_codes(self, image_id: str = None):
+        """
+        Runs/re-runs AI Neural OCR on the tray image to read handwritten/printed
+        product numbers and compartment codes written above or beside each item.
+        """
+        try:
+            sess = self.get_active_session()
+            if not self._ocr_reader or not self._ocr_reader.is_available:
+                return {"status": "error", "message": "OCR engine not available"}
+
+            target_images = []
+            if image_id:
+                for img in sess.get("images", []):
+                    if img["id"] == image_id:
+                        target_images.append(img)
+                        break
+            else:
+                target_images = sess.get("images", [])
+
+            if not target_images:
+                return {"status": "error", "message": "No images in session"}
+
+            total_found = 0
+            for img in target_images:
+                img_path = img.get("path")
+                prods = img.get("products", [])
+                if img_path and Path(img_path).exists() and prods:
+                    updated_prods, found = self._ocr_reader.read_tray_codes(img_path, prods)
+                    img["products"] = updated_prods
+                    total_found += found
+
+            self._save_session_autosave()
+            self.log(f"Read written tray codes with AI OCR: identified {total_found} codes")
+            return {
+                "status": "success",
+                "found_count": total_found,
+                "session": sess
+            }
+        except Exception as e:
+            self.log(f"Read written codes error: {e}")
             return {"status": "error", "message": str(e)}
 
     def optimize_crop_studio(self, crop_path: str, mode: str = "studio"):
