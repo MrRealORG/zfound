@@ -405,7 +405,61 @@ class CodeOcrReader:
                         p["name"] = f"Item {val_str}"
                         matched_count += 1
 
-        return products, matched_count
+        # Step 4: Assemble flattened products in strict spatial reading order (row by row, left to right)
+        sorted_products = []
+        seq_idx = 1
+        for row in rows:
+            row.sort(key=lambda p: p.get("x", 0))
+            for p in row:
+                p["product_index"] = seq_idx
+                if not p.get("name") or p.get("name").startswith("Product "):
+                    if p.get("code") and not str(p.get("code")).startswith("ZF"):
+                        p["name"] = f"Item {p['code']}"
+                    else:
+                        p["name"] = f"Product {seq_idx}"
+                sorted_products.append(p)
+                seq_idx += 1
+
+        return sorted_products, matched_count
+
+    @staticmethod
+    def sort_products_spatially(products: List[Dict]) -> List[Dict]:
+        """
+        Sorts products in strict top-to-bottom, left-to-right reading order (by row).
+        Re-indexes product_index sequentially 1..N and normalizes display names.
+        """
+        if not products:
+            return []
+
+        sorted_by_y = sorted(products, key=lambda p: (p.get("y", 0), p.get("x", 0)))
+        rows = []
+        for p in sorted_by_y:
+            py = p.get("y", 0)
+            placed = False
+            for r in rows:
+                avg_y = sum(item.get("y", 0) for item in r) / len(r)
+                if abs(avg_y - py) < 70:
+                    r.append(p)
+                    placed = True
+                    break
+            if not placed:
+                rows.append([p])
+
+        ordered = []
+        idx = 1
+        for r in rows:
+            r.sort(key=lambda p: p.get("x", 0))
+            for p in r:
+                p["product_index"] = idx
+                if not p.get("name") or p.get("name").startswith("Product ") or (p.get("code") and p.get("name").startswith("Item ")):
+                    if p.get("code") and not str(p.get("code")).startswith("ZF"):
+                        p["name"] = f"Item {p['code']}"
+                    else:
+                        p["name"] = f"Product {idx}"
+                ordered.append(p)
+                idx += 1
+
+        return ordered
 
     def _interpolate_row_sequence(self, row: List[Dict]):
         """Fills missing product numbers if items in a row form a sequential series."""
@@ -421,12 +475,24 @@ class CodeOcrReader:
         if len(digits_indices) < 2:
             return
 
-        base_idx, base_val, pad = digits_indices[0]
+        # Find best consecutive pair to establish rock-solid base
+        best_base = digits_indices[0]
+        for i in range(len(digits_indices) - 1):
+            i1, v1, l1 = digits_indices[i]
+            i2, v2, l2 = digits_indices[i + 1]
+            if i2 > i1 and v2 > v1:
+                step = (v2 - v1) / (i2 - i1)
+                if abs(step - 1.0) < 0.15:
+                    best_base = (i1, v1, l1)
+                    break
+
+        base_idx, base_val, pad = best_base
         for idx, p in enumerate(row):
             expected_val = base_val + (idx - base_idx)
             expected_str = str(expected_val).zfill(pad)
             curr_code = str(p.get("code", "")).strip()
-            if not p.get("ocr_detected") or not (curr_code.isdigit() and abs(int(curr_code) - expected_val) <= 1):
+            # If not detected or if detected code is out of consecutive sequence, replace with expected sequence
+            if not p.get("ocr_detected") or not (curr_code.isdigit() and abs(int(curr_code) - expected_val) == 0):
                 p["code"] = expected_str
                 p["barcode"] = expected_str
                 p["barcode_type"] = "OCR / Seq"

@@ -472,10 +472,10 @@
                         <div class="canvas-scaler-select-wrap">
                             <span class="scaler-mini-label">Upscaler:</span>
                             <select id="canvas-scaler-select" class="toolbar-select canvas-scaler-select" title="Select AI super-resolution model for generated crops">
-                                <option value="realesrgan" selected>🤖 Real-ESRGAN AI 4x (Studio)</option>
-                                <option value="fsrcnn">⚡ FSRCNN Neural 4x (Fast)</option>
+                                <option value="fsrcnn" selected>⚡ FSRCNN Neural 4x (Fast & Crisp)</option>
+                                <option value="realesrgan">🤖 Real-ESRGAN AI 4x (Studio HD)</option>
                                 <option value="espcn">⚡ ESPCN Neural 4x (Sub-Pixel)</option>
-                                <option value="lanczos">🎯 Lanczos-4 HD (Smooth)</option>
+                                <option value="lanczos">🎯 Lanczos-4 HD (Instant)</option>
                             </select>
                         </div>
 
@@ -656,7 +656,7 @@
                         <div class="toolbar-group auto-code-group">
                             <span class="toolbar-label">⚡ Auto-Code:</span>
                             <div class="auto-code-input-wrap">
-                                <input type="text" id="auto-code-input" class="toolbar-input" placeholder="e.g. ZF01 or ZF-100" value="ZF01" title="Enter code prefix + number (e.g. ZF01, ZF00, RING-001)">
+                                <input type="text" id="auto-code-input" class="toolbar-input" placeholder="e.g. 10463, ZF01 or RING-001" title="Enter code prefix + number (e.g. 10463, ZF01, RING-001)">
                                 <button id="btn-auto-code-apply" class="btn btn-secondary btn-sm" title="Generate sequential codes for all products in this session">
                                     <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                                     <span>Auto Code All</span>
@@ -684,10 +684,10 @@
                             <span class="toolbar-label">✨ AI Model:</span>
                             <div class="scaler-model-select-wrap">
                                 <select id="scaler-model-select" class="toolbar-select" title="Choose AI Super-Resolution model">
-                                    <option value="realesrgan" selected>🤖 Real-ESRGAN AI 4x (Studio HD)</option>
-                                    <option value="fsrcnn">⚡ FSRCNN Neural 4x (Fast 90ms)</option>
+                                    <option value="fsrcnn" selected>⚡ FSRCNN Neural 4x (Fast & Crisp)</option>
+                                    <option value="realesrgan">🤖 Real-ESRGAN AI 4x (Studio HD)</option>
                                     <option value="espcn">⚡ ESPCN Neural 4x (Sub-Pixel Fast)</option>
-                                    <option value="lanczos">🎯 Lanczos-4 HD (Smooth)</option>
+                                    <option value="lanczos">🎯 Lanczos-4 HD (Instant)</option>
                                 </select>
                                 <button id="btn-upscale-all" class="btn btn-secondary btn-sm" title="Re-enhance and upscale all crops with selected AI model">
                                     <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>

@@ -2890,9 +2890,11 @@
                     const pId = boxGroup.dataset.productId;
                     const prod = (state.scanner.activeImage.products || []).find(p => p.id === pId);
                     if (prod) {
-                        state.scanner.selectedProductId = pId;
-                        renderSvgBoxes();
-                        renderDetectionsList();
+                        if (state.scanner.selectedProductId !== pId) {
+                            state.scanner.selectedProductId = pId;
+                            renderSvgBoxes();
+                            renderDetectionsList();
+                        }
                         state.scanner.dragTarget = {
                             type: 'move',
                             productId: pId,
@@ -3113,7 +3115,7 @@
             if (elements.canvasScalerSelect && elements.canvasScalerSelect.value) {
                 return elements.canvasScalerSelect.value;
             }
-            return 'realesrgan';
+            return 'fsrcnn';
         }
 
         if (elements.canvasScalerSelect) {
@@ -3166,17 +3168,38 @@
         if (elements.btnScannerNext) {
             elements.btnScannerNext.addEventListener('click', async () => {
                 const model = getSelectedScalerModel();
-                showToast(`Generating ${model} upscaled & enhanced product crops...`, '✨');
-                const crops = await Bridge.generateProductCrops(null, true, model);
-                if (!crops || crops.length === 0) {
-                    showToast('No products detected to review', '⚠️');
-                    return;
+                const origHtml = elements.btnScannerNext.innerHTML;
+                elements.btnScannerNext.disabled = true;
+                elements.btnScannerNext.innerHTML = `
+                    <svg class="btn-svg spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                    <span>Upscaling & Enhancing...</span>
+                `;
+                try {
+                    showToast(`Generating ${model.toUpperCase()} upscaled & enhanced product crops...`, '✨');
+                    const crops = await Bridge.generateProductCrops(null, true, model);
+                    if (!crops || crops.length === 0) {
+                        showToast('No products detected to review', '⚠️');
+                        return;
+                    }
+                    state.scanner.crops = crops;
+
+                    // Automatically pre-fill Auto-Code input if we have detected sequential codes
+                    const firstDetectedCode = crops.find(c => c.code && !String(c.code).startsWith('ZF'))?.code || crops[0]?.code;
+                    if (firstDetectedCode && elements.autoCodeInput) {
+                        elements.autoCodeInput.value = firstDetectedCode;
+                    }
+
+                    renderProductReviewGrid();
+                    if (elements.scannerSessionBar) elements.scannerSessionBar.classList.add('hidden');
+                    if (elements.scannerStepCanvas) elements.scannerStepCanvas.classList.add('hidden');
+                    if (elements.scannerStepReview) elements.scannerStepReview.classList.remove('hidden');
+                } catch (err) {
+                    console.error('[ZFound] Crop generation error:', err);
+                    showToast('Crop generation error: ' + (err.message || err), '⚠️');
+                } finally {
+                    elements.btnScannerNext.disabled = false;
+                    elements.btnScannerNext.innerHTML = origHtml;
                 }
-                state.scanner.crops = crops;
-                renderProductReviewGrid();
-                if (elements.scannerSessionBar) elements.scannerSessionBar.classList.add('hidden');
-                if (elements.scannerStepCanvas) elements.scannerStepCanvas.classList.add('hidden');
-                if (elements.scannerStepReview) elements.scannerStepReview.classList.remove('hidden');
             });
         }
 
@@ -3218,16 +3241,25 @@
             crops.forEach((crop, i) => {
                 const numStr = String(startNum + i).padStart(padLength, '0');
                 crop.code = `${prefix}${numStr}`;
+                if (!crop.name || crop.name.startsWith('Product ') || crop.name.startsWith('Item ')) {
+                    crop.name = `Item ${crop.code}`;
+                }
             });
 
             const cards = elements.productsReviewGrid?.querySelectorAll('.product-review-card');
             cards?.forEach((card, idx) => {
-                const input = card.querySelector('.input-crop-code');
-                if (input && crops[idx]) {
-                    input.value = crops[idx].code;
-                    input.classList.remove('flash-highlight');
-                    void input.offsetWidth;
-                    input.classList.add('flash-highlight');
+                const codeInput = card.querySelector('.input-crop-code');
+                const nameInput = card.querySelector('.input-crop-name');
+                if (crops[idx]) {
+                    if (codeInput) {
+                        codeInput.value = crops[idx].code;
+                        codeInput.classList.remove('flash-highlight');
+                        void codeInput.offsetWidth;
+                        codeInput.classList.add('flash-highlight');
+                    }
+                    if (nameInput && crops[idx].name) {
+                        nameInput.value = crops[idx].name;
+                    }
                 }
             });
 

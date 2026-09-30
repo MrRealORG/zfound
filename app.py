@@ -124,8 +124,10 @@ class ZFoundApi:
                 with open(SESSION_AUTOSAVE_PATH, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     if isinstance(data, dict) and "images" in data:
-                        # Rehydrate lightweight base64 URLs on session boot
+                        # Rehydrate lightweight base64 URLs on session boot and ensure spatial ordering
                         for img in data.get("images", []):
+                            if "products" in img and img["products"]:
+                                img["products"] = CodeOcrReader.sort_products_spatially(img["products"])
                             p = img.get("path")
                             if p and os.path.exists(p):
                                 if not img.get("thumb_url"):
@@ -1025,6 +1027,9 @@ class ZFoundApi:
                         "user_locked": False
                     })
 
+                # Sort products in natural reading order (row by row, left to right)
+                products = CodeOcrReader.sort_products_spatially(products)
+
                 # Auto-detect handwritten / printed tray compartment codes with Neural OCR
                 try:
                     if self._ocr_reader and self._ocr_reader.is_available:
@@ -1266,45 +1271,56 @@ class ZFoundApi:
             if img_cv is None:
                 return {"status": "error", "message": "Cannot read image file"}
 
-            # Separate manual / user-locked products to preserve them
-            preserved_products = [
-                p for p in target_img.get("products", [])
-                if p.get("source") == "manual" or p.get("user_locked") is True
-            ]
+            # Preserve all existing products (both manual cuts and previous detections)
+            existing_products = list(target_img.get("products", []))
 
             # Deep Multi-Pass Inference (lower threshold 0.12, CLAHE contrast boost, and multi-threshold contour analysis)
             detections = self._detector.detect_products_deep(img_cv, conf_threshold=0.12, iou_threshold=0.35)
 
-            new_products = list(preserved_products)
-            start_idx = len(new_products) + 1
+            new_products = list(existing_products)
             new_discovered = 0
+            import math
 
             for det in detections:
+                det_x, det_y, det_w, det_h = det["x"], det["y"], det["width"], det["height"]
+                det_cx = det_x + det_w / 2.0
+                det_cy = det_y + det_h / 2.0
+
                 overlap = False
-                for p in preserved_products:
+                for p in existing_products:
+                    px, py, pw, ph = p["x"], p["y"], p["width"], p["height"]
+                    pcx = px + pw / 2.0
+                    pcy = py + ph / 2.0
+                    center_dist = math.hypot(det_cx - pcx, det_cy - pcy)
+                    min_dim = min(det_w, det_h, pw, ph)
+
                     iou = self._calc_iou(det, p)
-                    if iou > 0.35:
+                    if center_dist < min_dim * 0.55 or iou > 0.25:
                         overlap = True
                         break
-                if not overlap:
+
+                if not overlap and det_y >= 25 and det_w >= 20 and det_h >= 20:
+                    temp_idx = len(new_products) + 1
                     new_products.append({
-                        "id": f"prod_{image_id}_{start_idx}",
-                        "product_index": start_idx,
-                        "x": det["x"],
-                        "y": det["y"],
-                        "width": det["width"],
-                        "height": det["height"],
+                        "id": f"prod_{image_id}_{int(time.time()*1000)}_{temp_idx}",
+                        "product_index": temp_idx,
+                        "x": det_x,
+                        "y": det_y,
+                        "width": det_w,
+                        "height": det_h,
                         "confidence": det.get("confidence", 0.5),
                         "source": "ai",
                         "label": det.get("label", "Product"),
-                        "name": f"Product {start_idx}",
-                        "code": f"ZF{str(start_idx).zfill(2)}",
+                        "name": f"Product {temp_idx}",
+                        "code": f"ZF{str(temp_idx).zfill(2)}",
                         "box": "A-01",
                         "notes": "",
                         "user_locked": False
                     })
-                    start_idx += 1
                     new_discovered += 1
+
+            # Sort products in natural reading order (row by row, left to right)
+            new_products = CodeOcrReader.sort_products_spatially(new_products)
 
             # Auto-detect handwritten / printed tray compartment codes on re-analyzed products
             try:
@@ -1393,9 +1409,17 @@ class ZFoundApi:
                     "user_locked": True
                 }
                 img.setdefault("products", []).append(new_prod)
+                # Sort products in natural reading order so manual cut fits its slot
+                img["products"] = CodeOcrReader.sort_products_spatially(img["products"])
+                if self._ocr_reader and self._ocr_reader.is_available and img.get("path"):
+                    try:
+                        img["products"], _ = self._ocr_reader.read_tray_codes(img["path"], img["products"])
+                    except Exception:
+                        pass
                 self._save_session_autosave()
-                self.log(f"Manual product added to {img['name']} (Product {next_idx})")
-                return {"status": "success", "product": new_prod, "session": sess}
+                final_prod = next((p for p in img["products"] if p["id"] == new_prod["id"]), new_prod)
+                self.log(f"Manual product added to {img['name']} (Product {final_prod.get('product_index')}, Code {final_prod.get('code')})")
+                return {"status": "success", "product": final_prod, "session": sess}
         return {"status": "error", "message": "Image not found"}
 
     def delete_detection_product(self, image_id: str, product_id: str):
@@ -1406,9 +1430,7 @@ class ZFoundApi:
                 filtered = [p for p in prods if p["id"] != product_id]
                 if len(filtered) < len(prods):
                     img["removed_count"] = img.get("removed_count", 0) + (len(prods) - len(filtered))
-                    img["products"] = filtered
-                    for i, p in enumerate(img["products"], start=1):
-                        p["product_index"] = i
+                    img["products"] = CodeOcrReader.sort_products_spatially(filtered)
                     self._save_session_autosave()
                     return {"status": "success", "session": sess}
         return {"status": "error", "message": "Product not found"}
@@ -1417,16 +1439,19 @@ class ZFoundApi:
         """Returns metadata list of available super-resolution models."""
         return ImageScaler.get_available_models()
 
-    def generate_product_crops(self, session_id: str = None, upscale: bool = True, model: str = "realesrgan"):
+    def generate_product_crops(self, session_id: str = None, upscale: bool = True, model: str = "fsrcnn"):
         """
         Takes every confirmed bounding box and generates an individual high-res crop.
-        When upscale=True, automatically applies real neural super-resolution (Real-ESRGAN AI 4x,
-        FSRCNN 4x, ESPCN 4x, or Lanczos-4 HD) to produce crisp HD visuals when zoomed.
+        When upscale=True, automatically applies real neural super-resolution (FSRCNN 4x,
+        Real-ESRGAN AI 4x, ESPCN 4x, or Lanczos-4 HD) to produce crisp HD visuals when zoomed.
         Preserves pristine raw crops to prevent compounding degradation.
+        Fast parallel execution across available CPU cores.
         """
+        import concurrent.futures
         sess = self.get_active_session()
         all_crops = []
         global_idx = 1
+        model = (model or "fsrcnn").lower()
 
         boxes = self.get_storage_boxes()
         default_box = boxes[0]["name"] if boxes else "A-01"
@@ -1436,10 +1461,15 @@ class ZFoundApi:
             if not img_path or not Path(img_path).exists():
                 continue
 
+            # Ensure products are in natural spatial reading order
+            sorted_prods = CodeOcrReader.sort_products_spatially(img_rec.get("products", []))
+            img_rec["products"] = sorted_prods
+
             try:
                 with Image.open(img_path) as full_img:
                     im_w, im_h = full_img.size
-                    for prod in img_rec.get("products", []):
+
+                    def process_one(prod, item_idx):
                         x = max(0, min(im_w - 1, prod["x"]))
                         y = max(0, min(im_h - 1, prod["y"]))
                         w = max(10, min(im_w - x, prod["width"]))
@@ -1449,7 +1479,6 @@ class ZFoundApi:
                         if crop.mode not in ("RGB", "RGBA"):
                             crop = crop.convert("RGB")
 
-                        # Save pristine master raw crop (never degraded by repeated upscales)
                         raw_crop_filename = f"crop_raw_{img_rec['id']}_{prod['id']}.png"
                         raw_crop_path = CROPS_DIR / raw_crop_filename
                         crop.save(raw_crop_path, format="PNG")
@@ -1480,16 +1509,16 @@ class ZFoundApi:
                             enh_w, enh_h = w, h
                             model_label = "Original"
 
-                        # Automatic Barcode & QR Code Scanning on product packaging
-                        detected_barcode = None
-                        detected_type = None
-                        try:
-                            codes = self._barcode_scanner.scan_image(crop)
-                            if codes:
-                                detected_barcode = codes[0]["code"]
-                                detected_type = codes[0]["type"]
-                        except Exception:
-                            pass
+                        detected_barcode = prod.get("barcode") or None
+                        detected_type = prod.get("barcode_type") or None
+                        if not detected_barcode:
+                            try:
+                                codes = self._barcode_scanner.scan_image(crop)
+                                if codes:
+                                    detected_barcode = codes[0]["code"]
+                                    detected_type = codes[0]["type"]
+                            except Exception:
+                                pass
 
                         prod["crop_path"] = str(crop_path).replace("\\", "/")
                         prod["raw_crop_path"] = str(raw_crop_path).replace("\\", "/")
@@ -1497,11 +1526,14 @@ class ZFoundApi:
                             prod["barcode"] = detected_barcode
                             prod["barcode_type"] = detected_type
 
-                        all_crops.append({
+                        code_val = prod.get("code") or detected_barcode or f"ZF{str(item_idx).zfill(2)}"
+                        name_val = prod.get("name") or (f"Item {code_val}" if code_val and not code_val.startswith("ZF") else f"Product {item_idx}")
+
+                        return {
                             "id": prod["id"],
                             "image_id": img_rec["id"],
                             "image_name": img_rec["name"],
-                            "product_index": global_idx,
+                            "product_index": item_idx,
                             "x": x,
                             "y": y,
                             "width": enh_w if upscale else w,
@@ -1515,21 +1547,39 @@ class ZFoundApi:
                             "crop_path": str(crop_path).replace("\\", "/"),
                             "raw_crop_path": str(raw_crop_path).replace("\\", "/"),
                             "crop_b64": b64,
-                            "name": prod.get("name") or f"Product {global_idx}",
-                            "code": prod.get("code") or detected_barcode or f"ZF{str(global_idx).zfill(2)}",
+                            "name": name_val,
+                            "code": code_val,
                             "barcode": detected_barcode or "",
                             "barcode_type": detected_type or "",
                             "box": prod.get("box") or default_box,
                             "notes": prod.get("notes", ""),
                             "source": prod.get("source", "ai")
-                        })
-                        global_idx += 1
+                        }
+
+                    max_workers = min(4, max(1, os.cpu_count() or 2))
+                    results = [None] * len(sorted_prods)
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        future_map = {
+                            executor.submit(process_one, p, global_idx + idx): idx
+                            for idx, p in enumerate(sorted_prods)
+                        }
+                        for fut in concurrent.futures.as_completed(future_map):
+                            idx = future_map[fut]
+                            try:
+                                results[idx] = fut.result()
+                            except Exception as ex:
+                                self.log(f"Error processing crop #{idx}: {ex}")
+
+                    for r in results:
+                        if r is not None:
+                            all_crops.append(r)
+                            global_idx += 1
 
             except Exception as e:
                 self.log(f"Error generating crops for {img_rec['name']}: {e}")
 
         self._save_session_autosave()
-        self.log(f"Generated {len(all_crops)} product crops with {model} (HD: {upscale})")
+        self.log(f"Generated {len(all_crops)} product crops with {model} (HD: {upscale}) in parallel")
         return all_crops
 
     def retake_product_crop(self, product_id: str, new_file_path: str = None, base64_data: str = None, upscale: bool = True, model: str = "realesrgan"):
