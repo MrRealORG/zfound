@@ -453,6 +453,15 @@
                         </button>
                         <input type="file" id="scanner-file-input" multiple accept="image/*" class="hidden-input">
 
+                        <button id="btn-connect-phone" class="btn btn-secondary" title="Connect Android phone over Wi-Fi to snap photos wirelessly">
+                            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+                                <line x1="12" y1="18" x2="12.01" y2="18"/>
+                            </svg>
+                            <span>Connect Phone</span>
+                            <span id="badge-phone-status" class="phone-status-dot offline" title="Phone Connection Status"></span>
+                        </button>
+
                         <div class="canvas-scaler-select-wrap" style="display:inline-flex; align-items:center; gap:6px; margin-right:4px;">
                             <span style="font-size:11px; font-weight:600; color:var(--text-muted);">Upscaler:</span>
                             <select id="canvas-scaler-select" class="toolbar-select" style="padding:4px 8px; font-size:11px;" title="Select AI super-resolution model for generated crops">
@@ -947,6 +956,88 @@
                     <button id="btn-viewer-zoom-fit" class="canvas-tool-btn-icon" title="Fit">Fit</button>
                 </div>
                 <span id="product-viewer-dims" class="text-muted" style="font-size:11px;">Dimensions: -</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connect Phone (Wi-Fi Camera Sync) Modal -->
+    <div id="connect-phone-modal" class="lightbox-overlay hidden">
+        <div class="lightbox-backdrop" id="connect-phone-backdrop"></div>
+        <div class="lightbox-dialog phone-sync-dialog">
+            <button id="connect-phone-close" class="lightbox-close-btn" title="Close">✕</button>
+            <div class="phone-modal-content">
+                <div class="phone-modal-header">
+                    <div class="phone-modal-title-row">
+                        <div class="phone-icon-wrap">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+                                <line x1="12" y1="18" x2="12.01" y2="18"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3>Connect Phone Camera</h3>
+                            <p class="text-muted" style="font-size:12px;">Snap photos on your Android phone—they automatically transfer to this PC over Wi-Fi!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="phone-modal-body">
+                    <!-- Left: QR Code Preview -->
+                    <div class="phone-qr-section">
+                        <div class="qr-card">
+                            <div class="qr-img-wrap" id="qr-img-container">
+                                <img id="phone-qr-image" src="" alt="Scan QR Code" class="phone-qr-img">
+                                <div id="phone-qr-spinner" class="phone-qr-spinner">
+                                    <div class="spinner-ring"></div>
+                                    <span>Generating QR...</span>
+                                </div>
+                            </div>
+                            <div class="qr-pin-pill">
+                                <span>Pairing PIN:</span>
+                                <strong id="phone-qr-pin">------</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Instructions & Connection Details -->
+                    <div class="phone-details-section">
+                        <div class="phone-status-card">
+                            <div class="status-indicator-row">
+                                <span class="phone-status-dot offline" id="phone-live-dot"></span>
+                                <span class="phone-live-text" id="phone-live-text">Waiting for phone to scan...</span>
+                            </div>
+                            <div class="phone-stats-row">
+                                <span>Photos received this session:</span>
+                                <strong id="phone-session-photos-count" class="phone-stat-badge">0</strong>
+                            </div>
+                        </div>
+
+                        <div class="phone-instructions-card">
+                            <div class="instruction-step">
+                                <span class="step-num">1</span>
+                                <div class="step-text">Connect your phone to the <strong>same local Wi-Fi router</strong> as this PC.</div>
+                            </div>
+                            <div class="instruction-step">
+                                <span class="step-num">2</span>
+                                <div class="step-text">Scan the QR code using your phone camera, browser, or the <strong>ZFound Android App</strong>.</div>
+                            </div>
+                            <div class="instruction-step">
+                                <span class="step-num">3</span>
+                                <div class="step-text">Click the shutter on your phone—photos immediately transfer here and run AI detection!</div>
+                            </div>
+                        </div>
+
+                        <div class="phone-link-row">
+                            <input type="text" id="phone-direct-url" readonly class="phone-url-input" value="http://...">
+                            <button id="btn-copy-phone-link" class="btn btn-secondary btn-sm" title="Copy web camera link to clipboard">
+                                <span>Copy Link</span>
+                            </button>
+                            <button id="btn-open-mobile-browser" class="btn btn-secondary btn-sm" title="Test camera in PC browser">
+                                <span>Test in Browser</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

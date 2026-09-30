@@ -321,6 +321,20 @@
                 return await window.pywebview.api.upscale_product_crop(cropPath, scale, model);
             }
             return { status: 'error', message: 'No backend bridge available' };
+        },
+
+        async getSyncServerInfo() {
+            if (window.pywebview && window.pywebview.api) {
+                return await window.pywebview.api.get_sync_server_info();
+            }
+            return { status: 'offline', local_ip: '127.0.0.1', port: 7890, pin: '', url: '', qr_b64: '' };
+        },
+
+        async getPendingMobileEvents() {
+            if (window.pywebview && window.pywebview.api) {
+                return await window.pywebview.api.get_pending_mobile_events();
+            }
+            return [];
         }
     };
 
@@ -517,6 +531,8 @@
         btnScannerCamera: document.getElementById('btn-scanner-camera'),
         btnScannerUpload: document.getElementById('btn-scanner-upload'),
         scannerFileInput: document.getElementById('scanner-file-input'),
+        btnConnectPhone: document.getElementById('btn-connect-phone'),
+        badgePhoneStatus: document.getElementById('badge-phone-status'),
         btnScannerNext: document.getElementById('btn-scanner-next'),
         badgeNextCount: document.getElementById('badge-next-count'),
         sessionThumbsStrip: document.getElementById('session-thumbs-strip'),
@@ -571,6 +587,20 @@
         btnCameraSwitch: document.getElementById('btn-camera-switch'),
         btnCameraSnap: document.getElementById('btn-camera-snap'),
         btnCameraFallbackUpload: document.getElementById('btn-camera-fallback-upload'),
+
+        // Connect Phone Modal
+        connectPhoneModal: document.getElementById('connect-phone-modal'),
+        connectPhoneBackdrop: document.getElementById('connect-phone-backdrop'),
+        connectPhoneClose: document.getElementById('connect-phone-close'),
+        phoneQrImage: document.getElementById('phone-qr-image'),
+        phoneQrSpinner: document.getElementById('phone-qr-spinner'),
+        phoneQrPin: document.getElementById('phone-qr-pin'),
+        phoneLiveDot: document.getElementById('phone-live-dot'),
+        phoneLiveText: document.getElementById('phone-live-text'),
+        phoneSessionPhotosCount: document.getElementById('phone-session-photos-count'),
+        phoneDirectUrl: document.getElementById('phone-direct-url'),
+        btnCopyPhoneLink: document.getElementById('btn-copy-phone-link'),
+        btnOpenMobileBrowser: document.getElementById('btn-open-mobile-browser'),
 
         // Storage View Elements
         btnCreateBox: document.getElementById('btn-create-box'),
@@ -2392,8 +2422,141 @@
         };
     }
 
+    function updatePhoneStatusPill(connected, ip) {
+        if (elements.badgePhoneStatus) {
+            elements.badgePhoneStatus.classList.toggle('offline', !connected);
+            elements.badgePhoneStatus.title = connected ? `Phone server ready on ${ip || 'Wi-Fi'}` : 'Offline';
+        }
+        if (elements.phoneLiveDot) {
+            elements.phoneLiveDot.classList.toggle('offline', !connected);
+        }
+        if (elements.phoneLiveText) {
+            elements.phoneLiveText.textContent = connected ? `Server active on ${ip || 'Wi-Fi'} — ready for phone scan` : 'Offline';
+        }
+    }
+
+    function setupConnectPhoneModal() {
+        if (!elements.connectPhoneModal) return;
+
+        const openModal = async () => {
+            elements.connectPhoneModal.classList.remove('hidden');
+            if (elements.phoneQrSpinner) elements.phoneQrSpinner.style.display = 'flex';
+            if (elements.phoneQrImage) elements.phoneQrImage.style.display = 'none';
+
+            try {
+                const info = await Bridge.getSyncServerInfo();
+                if (info && info.status === 'online') {
+                    if (elements.phoneQrImage && info.qr_b64) {
+                        elements.phoneQrImage.src = info.qr_b64;
+                        elements.phoneQrImage.style.display = 'block';
+                        if (elements.phoneQrSpinner) elements.phoneQrSpinner.style.display = 'none';
+                    }
+                    if (elements.phoneQrPin) elements.phoneQrPin.textContent = info.pin || '------';
+                    if (elements.phoneDirectUrl) elements.phoneDirectUrl.value = info.url || '';
+                    if (elements.phoneSessionPhotosCount) elements.phoneSessionPhotosCount.textContent = info.received_count || '0';
+                    
+                    updatePhoneStatusPill(true, info.local_ip);
+                } else {
+                    if (elements.phoneLiveText) elements.phoneLiveText.textContent = 'Server starting...';
+                }
+            } catch (err) {
+                console.warn('Failed to load sync server info:', err);
+            }
+        };
+
+        const closeModal = () => {
+            elements.connectPhoneModal.classList.add('hidden');
+        };
+
+        if (elements.btnConnectPhone) {
+            elements.btnConnectPhone.addEventListener('click', openModal);
+        }
+        if (elements.connectPhoneClose) {
+            elements.connectPhoneClose.addEventListener('click', closeModal);
+        }
+        if (elements.connectPhoneBackdrop) {
+            elements.connectPhoneBackdrop.addEventListener('click', closeModal);
+        }
+
+        if (elements.btnCopyPhoneLink) {
+            elements.btnCopyPhoneLink.addEventListener('click', () => {
+                if (elements.phoneDirectUrl && elements.phoneDirectUrl.value) {
+                    navigator.clipboard.writeText(elements.phoneDirectUrl.value).then(() => {
+                        showToast('Link copied to clipboard!', '📋');
+                    }).catch(() => {
+                        elements.phoneDirectUrl.select();
+                        document.execCommand('copy');
+                        showToast('Link copied!', '📋');
+                    });
+                }
+            });
+        }
+
+        if (elements.btnOpenMobileBrowser) {
+            elements.btnOpenMobileBrowser.addEventListener('click', () => {
+                if (elements.phoneDirectUrl && elements.phoneDirectUrl.value) {
+                    window.open(elements.phoneDirectUrl.value, '_blank');
+                }
+            });
+        }
+
+        // Check server status on startup
+        Bridge.getSyncServerInfo().then(info => {
+            if (info && info.status === 'online') {
+                updatePhoneStatusPill(true, info.local_ip);
+            }
+        }).catch(() => {});
+    }
+
+    // Global hook called directly from Python when mobile photo arrives
+    window.onMobilePhotoReceived = function(payload) {
+        if (!payload || payload.status !== 'success') return;
+
+        const device = payload.device || 'Android Phone';
+        const prodCount = payload.product_count || 0;
+        showToast(`📸 Received photo from ${device}! (${prodCount} products found)`, '✨');
+
+        if (payload.session) {
+            state.scanner.activeSession = payload.session;
+            if (payload.image) {
+                state.scanner.activeImage = payload.image;
+                state.scanner.activeImageId = payload.image.id;
+            }
+            renderSessionThumbs();
+            renderCanvas();
+            zoomFitCanvas();
+            updateSafetyStats();
+        }
+
+        if (elements.badgePhoneStatus) elements.badgePhoneStatus.classList.remove('offline');
+        if (elements.phoneLiveDot) elements.phoneLiveDot.classList.remove('offline');
+        if (elements.phoneLiveText) elements.phoneLiveText.textContent = `🟢 Connected to ${device}`;
+
+        if (elements.phoneSessionPhotosCount) {
+            const cur = parseInt(elements.phoneSessionPhotosCount.textContent, 10) || 0;
+            elements.phoneSessionPhotosCount.textContent = cur + 1;
+        }
+    };
+
+    function startMobileEventPoller() {
+        setInterval(async () => {
+            try {
+                const events = await Bridge.getPendingMobileEvents();
+                if (events && events.length > 0) {
+                    for (const evt of events) {
+                        if (evt.type === 'photo_received' && evt.result) {
+                            window.onMobilePhotoReceived(evt.result);
+                        }
+                    }
+                }
+            } catch (e) {}
+        }, 1500);
+    }
+
     function setupScanner() {
         setupCameraModal();
+        setupConnectPhoneModal();
+        startMobileEventPoller();
 
         // Upload images button
         if (elements.btnScannerUpload) {

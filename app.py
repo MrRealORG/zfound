@@ -31,6 +31,7 @@ from core.embedder import FastEmbedder
 from core.indexer import FastIndexer
 from core.product_detector import ProductDetector
 from core.image_scaler import ImageScaler
+from core.sync_server import SyncServer
 
 STORAGE_DIR = CURRENT_DIR / "storage"
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
@@ -80,6 +81,13 @@ class ZFoundApi:
         # Initialize storage directories & defaults
         self._init_storage_defaults()
         self._active_session = self._load_session_autosave()
+
+        # Initialize local Wi-Fi sync server for Android phone connection
+        self._sync_server = SyncServer(api_callback=self.add_mobile_image)
+        try:
+            self._sync_server.start()
+        except Exception as e:
+            self.log(f"Sync server start warning: {e}")
 
         self.log("ZFound Vision Engine initialized")
         if self._detector.is_ready:
@@ -1057,6 +1065,77 @@ class ZFoundApi:
             return {"status": "success", "session": sess}
         except Exception as e:
             self.log(f"Webcam capture error: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def get_sync_server_info(self):
+        """Returns connection information and QR code for mobile phone pairing."""
+        if self._sync_server:
+            return self._sync_server.get_connection_info()
+        return {"status": "offline", "local_ip": "127.0.0.1", "port": 7890, "pin": "", "url": "", "qr_b64": ""}
+
+    def get_pending_mobile_events(self):
+        """Polls any new mobile events (photos received, handshake)."""
+        if self._sync_server:
+            return self._sync_server.get_pending_events()
+        return []
+
+    def add_mobile_image(self, base64_data: str, device_name: str = "Android Phone"):
+        """
+        Processes photo uploaded from mobile device over local Wi-Fi.
+        Saves to active session, runs PP-PicoDet-XS detection, and notifies desktop UI.
+        """
+        try:
+            if not base64_data:
+                return {"status": "error", "message": "No image data"}
+
+            if "," in base64_data:
+                base64_data = base64_data.split(",", 1)[1]
+
+            raw_bytes = base64.b64decode(base64_data)
+            timestamp = int(time.time() * 1000)
+            save_name = f"mobile_capture_{timestamp}.jpg"
+            target_path = SESSION_DIR / save_name
+            with open(target_path, "wb") as f:
+                f.write(raw_bytes)
+
+            sess = self.add_session_images([str(target_path)])
+            self.log(f"Mobile photo received from {device_name}: {save_name}")
+
+            added_img = None
+            if sess and sess.get("images"):
+                for img in reversed(sess["images"]):
+                    if img.get("name") == save_name or save_name in img.get("path", ""):
+                        added_img = img
+                        break
+                if not added_img and len(sess["images"]) > 0:
+                    added_img = sess["images"][-1]
+
+            # Set as active image if newly added
+            if added_img:
+                sess["active_image_id"] = added_img["id"]
+                self._save_session_autosave()
+
+            product_count = len(added_img.get("products", [])) if added_img else 0
+            payload = {
+                "status": "success",
+                "message": f"Photo received from {device_name}! ({product_count} products detected)",
+                "device": device_name,
+                "image": added_img,
+                "session": sess,
+                "product_count": product_count
+            }
+
+            # Live UI notification in pywebview window
+            if self._window:
+                try:
+                    js_code = f"window.onMobilePhotoReceived && window.onMobilePhotoReceived({json.dumps(payload)});"
+                    self._window.evaluate_js(js_code)
+                except Exception as e:
+                    self.log(f"JS eval error: {e}")
+
+            return payload
+        except Exception as e:
+            self.log(f"Error handling mobile photo: {e}")
             return {"status": "error", "message": str(e)}
 
     def retake_session_image(self, image_id: str, new_file_path: str = None, base64_data: str = None):

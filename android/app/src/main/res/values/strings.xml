@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ZFound Camera</string>
+    <string name="status_connected">Connected to PC</string>
+    <string name="status_disconnected">Not Paired with PC</string>
+    <string name="status_connecting">Connecting...</string>
+    <string name="scan_qr_prompt">Scan the QR code shown on your PC screen</string>
+    <string name="qr_hint">Align QR code within the frame</string>
+    <string name="btn_scan_qr">Scan QR Code</string>
+    <string name="uploading_photo">Transferring photo to PC...</string>
+    <string name="upload_success">Photo transferred to PC!</string>
+    <string name="upload_failed">Transfer failed. Check Wi-Fi connection.</string>
+    <string name="camera_permission_required">Camera permission is required to capture photos and scan the QR code.</string>
+</resources>

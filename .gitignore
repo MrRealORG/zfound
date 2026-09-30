@@ -27,3 +27,16 @@ aa/
 *.pb
 *.bin
 *.safetensors
+
+# Android Gradle build outputs & IDE
+.gradle/
+build/
+android/.gradle/
+android/build/
+android/app/build/
+*.apk
+*.aab
+local.properties
+.idea/
+*.iml
+
