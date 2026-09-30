@@ -1,0 +1,27 @@
+[
+  {
+    "id": "box_a01",
+    "name": "A-01",
+    "description": "Storage Rack A, Box 1"
+  },
+  {
+    "id": "box_a02",
+    "name": "A-02",
+    "description": "Storage Rack A, Box 2"
+  },
+  {
+    "id": "box_a03",
+    "name": "A-03",
+    "description": "Storage Rack A, Box 3"
+  },
+  {
+    "id": "box_b01",
+    "name": "B-01",
+    "description": "Storage Rack B, Box 1"
+  },
+  {
+    "id": "box_b02",
+    "name": "B-02",
+    "description": "Storage Rack B, Box 2"
+  }
+]

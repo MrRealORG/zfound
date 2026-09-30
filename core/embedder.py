@@ -1,6 +1,7 @@
 import os
 import gc
 import json
+import threading
 from pathlib import Path
 import numpy as np
 from PIL import Image
@@ -15,6 +16,7 @@ class FastEmbedder:
         self.is_ready = False
         self.device = "cpu"
         self.model_type = None
+        self._lock = threading.Lock()
 
     def detect_local_models(self):
         found = []
@@ -28,17 +30,27 @@ class FastEmbedder:
                 weights_safe = entry / "model.safetensors"
                 if config_file.exists() and (weights_bin.exists() or weights_safe.exists()):
                     model_type = "unknown"
-                    dim = 512
+                    dim = 768 if "siglip" in entry.name.lower() else 512
                     try:
                         with open(config_file, "r", encoding="utf-8") as f:
                             cfg = json.load(f)
                             model_type = cfg.get("model_type", "vision")
-                            if "vision_config" in cfg and "hidden_size" in cfg["vision_config"]:
-                                dim = cfg["vision_config"]["hidden_size"]
-                            elif "projection_dim" in cfg:
+                            if "projection_dim" in cfg:
                                 dim = cfg["projection_dim"]
+                            elif "vision_config" in cfg and "projection_dim" in cfg["vision_config"]:
+                                dim = cfg["vision_config"]["projection_dim"]
+                            elif "vision_config" in cfg and "hidden_size" in cfg["vision_config"]:
+                                dim = cfg["vision_config"]["hidden_size"]
+                            elif "text_config" in cfg and "hidden_size" in cfg["text_config"]:
+                                dim = cfg["text_config"]["hidden_size"]
                     except Exception:
                         pass
+                    # Hard calibration for known architectures
+                    if "siglip" in entry.name.lower() and dim < 768:
+                        dim = 768
+                    elif "clip-vit-base" in entry.name.lower():
+                        dim = 512
+
                     found.append({
                         "name": entry.name,
                         "path": str(entry).replace("\\", "/"),
@@ -46,67 +58,82 @@ class FastEmbedder:
                         "dimension": dim,
                         "has_safetensors": weights_safe.exists()
                     })
+        # Prioritize fine-grained SigLIP models first
+        found.sort(key=lambda m: (0 if "siglip" in m["name"].lower() else 1, 0 if m["has_safetensors"] else 1))
         return found
 
     def load_model(self, model_path: str = None, progress_cb=None):
-        import torch
-        from transformers import AutoProcessor, AutoModel
+        with self._lock:
+            target_path = Path(model_path) if model_path else None
+            if not target_path or not target_path.exists():
+                models = self.detect_local_models()
+                if not models:
+                    raise FileNotFoundError(f"No valid models found in {self.models_dir}")
+                target_path = Path(models[0]["path"])
 
-        # Set thread budget for low memory & CPU friendliness
-        torch.set_num_threads(max(1, min(4, os.cpu_count() or 2)))
-        torch.set_grad_enabled(False)
+            # Fast return if model is already loaded and ready
+            if self.is_ready and self.model is not None and self.model_name == target_path.name:
+                return {
+                    "model_name": self.model_name,
+                    "dimension": self.dimension,
+                    "device": self.device,
+                    "status": "ready"
+                }
 
-        target_path = Path(model_path) if model_path else None
-        if not target_path or not target_path.exists():
-            models = self.detect_local_models()
-            if not models:
-                raise FileNotFoundError(f"No valid models found in {self.models_dir}")
-            # Prefer siglip or safetensors if available
-            target_path = Path(models[0]["path"])
-            for m in models:
-                if "siglip" in m["name"].lower():
-                    target_path = Path(m["path"])
-                    break
+            import torch
+            from transformers import AutoProcessor, AutoModel
 
-        if progress_cb:
-            progress_cb("Mounting neural vision model...", 30)
+            # Set thread budget for low memory & CPU friendliness (keep PC cool & responsive)
+            cpu_cnt = os.cpu_count() or 2
+            threads = max(1, min(2, cpu_cnt - 1))
+            torch.set_num_threads(threads)
+            torch.set_grad_enabled(False)
 
-        # Unload any previously loaded model to release RAM
-        if self.model is not None:
-            del self.model
-            del self.processor
-            gc.collect()
+            if progress_cb:
+                progress_cb("Mounting neural vision model...", 30)
 
-        print(f"[Embedder] Loading model from: {target_path}")
-        self.processor = AutoProcessor.from_pretrained(str(target_path), local_files_only=True)
-        
-        # Load in inference mode
-        self.model = AutoModel.from_pretrained(
-            str(target_path),
-            local_files_only=True,
-            torch_dtype=torch.float32,
-            low_cpu_mem_usage=True
-        )
-        self.model.eval()
+            # Unload any previously loaded model to release RAM
+            if self.model is not None:
+                del self.model
+                del self.processor
+                self.model = None
+                self.processor = None
+                self.is_ready = False
+                gc.collect()
 
-        self.model_name = target_path.name
-        self.model_type = "siglip" if "siglip" in target_path.name.lower() else "clip"
-        self.is_ready = True
-        
-        # Determine output dimension
-        dummy_img = Image.new("RGB", (224, 224), color=(128, 128, 128))
-        test_emb = self.embed_image(dummy_img)
-        self.dimension = len(test_emb)
+            print(f"[Embedder] Loading model from: {target_path}")
+            try:
+                self.processor = AutoProcessor.from_pretrained(str(target_path), local_files_only=True, use_fast=False)
+            except Exception:
+                self.processor = AutoProcessor.from_pretrained(str(target_path), local_files_only=True)
+            
+            # Load in inference mode with modern dtype parameter
+            self.model = AutoModel.from_pretrained(
+                str(target_path),
+                local_files_only=True,
+                dtype=torch.float32,
+                low_cpu_mem_usage=True
+            )
+            self.model.eval()
 
-        if progress_cb:
-            progress_cb("Neural model active", 100)
+            self.model_name = target_path.name
+            self.model_type = "siglip" if "siglip" in target_path.name.lower() else "clip"
+            self.is_ready = True
+            
+            # Determine output dimension
+            dummy_img = Image.new("RGB", (224, 224), color=(128, 128, 128))
+            test_emb = self.embed_image(dummy_img)
+            self.dimension = len(test_emb)
 
-        return {
-            "model_name": self.model_name,
-            "dimension": self.dimension,
-            "device": self.device,
-            "status": "ready"
-        }
+            if progress_cb:
+                progress_cb("Neural model active", 100)
+
+            return {
+                "model_name": self.model_name,
+                "dimension": self.dimension,
+                "device": self.device,
+                "status": "ready"
+            }
 
     def _extract_tensor(self, outputs):
         import torch
@@ -129,9 +156,14 @@ class FastEmbedder:
         if isinstance(image_input, (str, Path)):
             with Image.open(image_input) as img:
                 image = img.convert("RGB")
+                if max(image.size) > 512:
+                    image.thumbnail((512, 512), Image.Resampling.BILINEAR)
                 return self._compute_embedding(image)
         elif isinstance(image_input, Image.Image):
             image = image_input.convert("RGB") if image_input.mode != "RGB" else image_input
+            if max(image.size) > 512:
+                image = image.copy()
+                image.thumbnail((512, 512), Image.Resampling.BILINEAR)
             return self._compute_embedding(image)
         else:
             raise ValueError("Unsupported image input type")
@@ -139,7 +171,7 @@ class FastEmbedder:
     def _compute_embedding(self, pil_image):
         import torch
         inputs = self.processor(images=pil_image, return_tensors="pt")
-        with torch.no_grad():
+        with torch.inference_mode():
             if hasattr(self.model, "get_image_features"):
                 outputs = self.model.get_image_features(**inputs)
             else:

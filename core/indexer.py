@@ -47,6 +47,9 @@ class FastIndexer:
             return []
 
         q_vec = np.asarray(query_emb, dtype=np.float32).reshape(1, -1)
+        if q_vec.shape[1] != self.dim:
+            raise ValueError(f"Vector dimension mismatch: index has {self.dim}-D vectors, but query is {q_vec.shape[1]}-D.")
+
         q_norm = np.linalg.norm(q_vec)
         if q_norm > 0:
             q_vec = q_vec / q_norm
@@ -71,16 +74,31 @@ class FastIndexer:
                 except Exception:
                     pass
 
-            # Convert cosine similarity to percentage score [0% - 100%]
-            # Cosine similarity for vision models typically spans 0.4 to 1.0
+            # Convert cosine similarity to calibrated design percentage score [0% - 100%]
             if is_exact:
                 score_pct = 100.0
             else:
-                # Scale smoothly so identical/very close images show high percentages
-                # Normalized mapping: [0.3, 1.0] -> [0%, 100%]
                 raw_score = float(sim)
-                scaled = max(0.0, min(1.0, (raw_score - 0.2) / 0.8))
-                score_pct = round(scaled * 100.0, 1)
+                # 1. Structural similarity from perceptual hash (0.0 to 1.0)
+                # Completely different shapes/patterns have phash_dist > 90
+                struct_sim = 1.0
+                if phash_dist != 999:
+                    struct_sim = max(0.0, 1.0 - (phash_dist / 95.0))
+
+                # 2. Calibrated design neural contrast:
+                # - Below 0.72: completely different product / design
+                # - 0.72 to 0.88: same general category, different motif
+                # - 0.88 to 1.00: specific matching design and color/material variations
+                norm_cos = max(0.0, min(1.0, (raw_score - 0.72) / 0.28))
+                calibrated_neural = norm_cos ** 1.4
+
+                # 3. Hybrid fusion: 75% fine-grained neural + 25% geometric structure
+                if phash_dist != 999:
+                    fused = 0.75 * calibrated_neural + 0.25 * struct_sim
+                else:
+                    fused = calibrated_neural
+
+                score_pct = round(fused * 100.0, 1)
 
             if score_pct >= (min_score * 100.0):
                 results.append({
@@ -90,7 +108,10 @@ class FastIndexer:
                     "score": score_pct,
                     "raw_cosine": round(float(sim), 4),
                     "is_exact": is_exact,
-                    "phash_dist": phash_dist
+                    "phash_dist": phash_dist,
+                    "code": item.get("code", ""),
+                    "box": item.get("box", ""),
+                    "custom_name": item.get("custom_name", "")
                 })
 
         # Sort descending by score, exact matches first

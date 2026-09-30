@@ -56,6 +56,24 @@
                         <span class="nav-label">Find Similar</span>
                     </button>
 
+                    <button class="nav-item" data-view="scanner" title="AI Product Scanner & Cutter">
+                        <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M4 7V4h3M17 4h3v3M4 17v3h3M20 17v3h-3" />
+                            <circle cx="12" cy="12" r="3" />
+                            <line x1="8" y1="12" x2="16" y2="12" />
+                        </svg>
+                        <span class="nav-label">Scanner</span>
+                    </button>
+
+                    <button class="nav-item" data-view="storage" title="Storage Locations & Inventory">
+                        <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                            <line x1="12" y1="22.08" x2="12" y2="12" />
+                        </svg>
+                        <span class="nav-label">Storage</span>
+                    </button>
+
                     <button class="nav-item" data-view="models" title="Engine & Subsystem">
                         <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
@@ -84,6 +102,14 @@
                         <p class="view-subheading" id="library-subheading">Select a folder to scan and index local visual memories</p>
                     </div>
                     <div class="header-actions">
+                        <button id="btn-batch-label" class="btn btn-secondary" title="Batch auto-code images (e.g. ZF01, ZF02) and set Box numbers">
+                            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                                <line x1="7" y1="7" x2="7.01" y2="7"/>
+                            </svg>
+                            <span>Batch Code</span>
+                        </button>
+
                         <button id="btn-select-folder" class="btn btn-secondary">
                             <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -100,7 +126,7 @@
                     </div>
                 </header>
 
-                <!-- Library Toolbar / Stats -->
+                <!-- Library Toolbar / Stats & Search Filter -->
                 <div class="stats-strip">
                     <div class="stat-cell">
                         <span class="stat-label">Discovered</span>
@@ -119,6 +145,19 @@
                             <button id="btn-set-default-folder" class="btn-micro" title="Save this directory as your default starting folder">★ Default</button>
                         </div>
                     </div>
+                </div>
+
+                <!-- Live Search & Filter Bar -->
+                <div class="gallery-search-bar">
+                    <div class="search-input-wrapper">
+                        <svg class="search-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        </svg>
+                        <input type="text" id="gallery-search-filter" class="gallery-search-input" placeholder="Quick filter by code (e.g. ZF01), box (e.g. Box 1), or name..." autocomplete="off" spellcheck="false">
+                        <button id="btn-clear-gallery-filter" class="btn-clear-filter hidden" title="Clear filter">✕</button>
+                    </div>
+                    <span id="gallery-filter-count" class="filter-count-badge hidden">0 filtered</span>
                 </div>
 
                 <!-- Indexing Progress Bar (Discreet) -->
@@ -158,6 +197,36 @@
                         <p class="view-subheading">Drop any image to search visually identical (100%) or semantically similar images</p>
                     </div>
                     <div class="header-actions">
+                        <!-- Apple Liquid GooSwitch Toggle -->
+                        <div class="goo-switch-wrap" id="strict-mode-toggle-wrap" title="Toggle Exact Design Only vs Broad Match">
+                            <div class="goo-switch-label-group">
+                                <span class="goo-switch-label" id="strict-mode-title">Exact Design Only</span>
+                                <span class="goo-switch-sub" id="strict-mode-subtitle">70%+ Strict</span>
+                            </div>
+                            <button type="button" id="goo-switch-strict" class="goo-switch-btn is-on" role="switch" aria-checked="true" aria-label="Strict Mode Toggle">
+                                <svg class="goo-switch-svg" viewBox="0 0 62 32">
+                                    <defs>
+                                        <filter id="goo-switch-filter" x="-50%" y="-50%" width="200%" height="200%">
+                                            <feGaussianBlur in="SourceGraphic" stdDeviation="2" />
+                                            <feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" />
+                                        </filter>
+                                        <filter id="goo-switch-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                                            <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" />
+                                        </filter>
+                                    </defs>
+                                    <!-- Track Pill -->
+                                    <rect class="goo-track" width="62" height="32" rx="16" />
+                                    <!-- Soft Shadow -->
+                                    <ellipse class="goo-shadow" cx="45" cy="16" rx="11" ry="11" />
+                                    <!-- Liquid Goo Layer -->
+                                    <g class="goo-layer" filter="url(#goo-switch-filter)">
+                                        <ellipse class="goo-droplet" cx="45" cy="16" rx="11" ry="11" fill="#ffffff" />
+                                        <rect class="goo-thumb" x="33" y="4" width="24" height="24" rx="12" fill="#ffffff" />
+                                    </g>
+                                </svg>
+                            </button>
+                        </div>
+
                         <div class="filter-pill">
                             <span class="filter-label">Min Score</span>
                             <input type="range" id="search-threshold" min="0" max="95" value="70" class="mini-slider">
@@ -167,29 +236,85 @@
                 </header>
 
                 <div class="search-layout">
-                    <!-- Query Input Dropzone -->
+                    <!-- Query Input Dropzone & Upload Card -->
                     <div class="query-dock">
-                        <div id="query-dropzone" class="query-dropzone">
+                        <!-- Idle State: FileDropzone -->
+                        <div id="query-dropzone" class="file-dropzone-container" data-state="idle">
                             <input type="file" id="query-file-input" accept="image/*" class="hidden-input">
-                            <div class="dropzone-content" id="dropzone-placeholder">
-                                <div class="drop-circle-icon">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                        <polyline points="17 8 12 3 7 8" />
-                                        <line x1="12" y1="3" x2="12" y2="15" />
-                                    </svg>
-                                </div>
-                                <h4>Drop Query Image</h4>
-                                <p>Drag and drop an image or <span class="accent-link">click to browse</span></p>
+                            <div class="file-dropzone-icon-box">
+                                <svg class="file-dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+                                    <path d="M12 12v9" />
+                                    <path d="m8 16 4-4 4 4" />
+                                </svg>
                             </div>
-                            <div class="dropzone-preview hidden" id="dropzone-preview">
+                            <div class="file-dropzone-text-group">
+                                <p class="file-dropzone-heading">
+                                    Drag & drop image or <button type="button" class="file-dropzone-browse" id="btn-browse-query">choose</button>
+                                </p>
+                                <p class="file-dropzone-hint">
+                                    PNG, JPG, WEBP, BMP • Visual AI search
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Active State: FileUpload Card -->
+                        <div id="query-upload-card" class="file-upload-card-wrap hidden">
+                            <div class="file-upload-card group-upload">
+                                <!-- Background Wash effect -->
+                                <div class="file-upload-wash" id="query-upload-wash"></div>
+
+                                <!-- Card Content -->
+                                <div class="file-upload-body">
+                                    <!-- Dog-eared File Badge / Image Preview -->
+                                    <div class="file-badge-wrap">
+                                        <div class="file-badge bg-blue-500" id="query-file-badge">
+                                            <span class="badge-fold"></span>
+                                            <svg class="badge-glyph" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                                            </svg>
+                                            <span class="badge-ext" id="query-file-ext">IMG</span>
+                                        </div>
+                                        <img id="query-badge-preview" class="file-badge-thumb hidden" src="" alt="Thumbnail">
+                                    </div>
+
+                                    <!-- File Details -->
+                                    <div class="file-upload-info">
+                                        <p class="file-upload-name" id="query-file-name">query_image.png</p>
+                                        <div class="file-upload-status-row">
+                                            <span class="status-icon-wrap" id="query-status-icon">
+                                                <svg class="status-tick-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                                    <circle cx="12" cy="12" r="9" fill="rgba(16, 185, 129, 0.15)" stroke="#10b981"/>
+                                                    <polyline points="8 12 11 15 16 9" stroke="#10b981"/>
+                                                </svg>
+                                            </span>
+                                            <span class="file-status-label" id="query-status-label">Completed</span>
+                                            <span class="file-status-dot"></span>
+                                            <span class="file-size-label" id="query-file-size">1.2 MB</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Right Action Button: Remove/Clear -->
+                                    <div class="file-upload-actions">
+                                        <button type="button" id="btn-clear-query" class="file-btn-remove" title="Remove query image" aria-label="Remove image">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Progress Bar Track & Comet Fill -->
+                                <div class="file-upload-progress-row">
+                                    <div class="file-upload-track">
+                                        <div class="file-upload-fill" id="query-progress-fill"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Image Preview Inspector inside Dock -->
+                            <div class="query-preview-container" id="query-preview-container">
                                 <img id="query-img-element" src="" alt="Query Preview">
-                                <button id="btn-clear-query" class="btn-clear-dock" title="Clear query">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                                    </svg>
-                                </button>
                             </div>
                         </div>
 
@@ -280,6 +405,8 @@
                                 Future updates will feature online HuggingFace model hub downloads and embedded OCR text indexing.
                             </p>
                         </div>
+                    </div>
+
                     <div class="glass-card full-width-card">
                         <div class="card-header-row">
                             <div>
@@ -292,6 +419,334 @@
                             <div id="live-logs-terminal" class="terminal-box">
                                 <div class="log-line text-muted">[System] ZFound engine telemetry initialized...</div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 4: AI Product Scanner & Cutter -->
+            <section id="view-scanner" class="view-panel">
+                <header class="panel-header">
+                    <div class="header-left">
+                        <div class="scanner-title-row">
+                            <h2 class="view-heading">Product Scanner</h2>
+                            <span class="badge-tag-pico">PP-PicoDet-XS • CPU</span>
+                        </div>
+                        <p class="view-subheading">Automatic physical product detection with manual cut & bounding-box correction</p>
+                    </div>
+                    <div class="header-actions">
+                        <button id="btn-scanner-camera" class="btn btn-secondary" title="Capture photo with camera">
+                            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                <circle cx="12" cy="13" r="4"/>
+                            </svg>
+                            <span>Take Photo</span>
+                        </button>
+
+                        <button id="btn-scanner-upload" class="btn btn-secondary" title="Upload one or multiple images">
+                            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            <span>Upload Images</span>
+                        </button>
+                        <input type="file" id="scanner-file-input" multiple accept="image/*" class="hidden-input">
+
+                        <div class="canvas-scaler-select-wrap" style="display:inline-flex; align-items:center; gap:6px; margin-right:4px;">
+                            <span style="font-size:11px; font-weight:600; color:var(--text-muted);">Upscaler:</span>
+                            <select id="canvas-scaler-select" class="toolbar-select" style="padding:4px 8px; font-size:11px;" title="Select AI super-resolution model for generated crops">
+                                <option value="realesrgan" selected>🤖 Real-ESRGAN AI 4x (Studio)</option>
+                                <option value="fsrcnn">⚡ FSRCNN Neural 4x (Fast)</option>
+                                <option value="espcn">⚡ ESPCN Neural 4x (Sub-Pixel)</option>
+                                <option value="lanczos">🎯 Lanczos-4 HD (Smooth)</option>
+                            </select>
+                        </div>
+
+                        <button id="btn-scanner-next" class="btn btn-primary" disabled title="Generate individual product crops and review">
+                            <span>Next: Review Products</span>
+                            <span id="badge-next-count" class="btn-badge-count">0</span>
+                            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="5" y1="12" x2="19" y2="12"/>
+                                <polyline points="12 5 19 12 12 19"/>
+                            </svg>
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Multi-Image Session Thumbnail Carousel -->
+                <div class="scanner-session-bar" id="scanner-session-bar">
+                    <div class="session-bar-header">
+                        <span class="session-label">Session Images:</span>
+                        <span id="session-image-count" class="text-muted">0 images</span>
+                    </div>
+                    <div class="session-thumbs-strip" id="session-thumbs-strip">
+                        <div class="session-empty-hint text-muted">Upload or take photos to start a multi-image scan session.</div>
+                    </div>
+                </div>
+
+                <!-- STEP 1: Detection Review Canvas -->
+                <div id="scanner-step-canvas" class="scanner-step-container">
+                    <!-- Missed Product Safety Stats Strip -->
+                    <div class="safety-stats-strip">
+                        <div class="safety-stat-cell">
+                            <span class="safety-stat-dot dot-ai"></span>
+                            <span class="safety-stat-label">AI Detected:</span>
+                            <span id="stat-ai-detected" class="safety-stat-val">0</span>
+                        </div>
+                        <div class="safety-stat-separator"></div>
+                        <div class="safety-stat-cell">
+                            <span class="safety-stat-dot dot-manual"></span>
+                            <span class="safety-stat-label">Manual Added:</span>
+                            <span id="stat-manual-added" class="safety-stat-val">0</span>
+                        </div>
+                        <div class="safety-stat-separator"></div>
+                        <div class="safety-stat-cell">
+                            <span class="safety-stat-dot dot-removed"></span>
+                            <span class="safety-stat-label">Removed:</span>
+                            <span id="stat-removed" class="safety-stat-val">0</span>
+                        </div>
+                        <div class="safety-stat-separator"></div>
+                        <div class="safety-stat-cell cell-final">
+                            <span class="safety-stat-label">Final Products:</span>
+                            <span id="stat-final-products" class="safety-stat-val val-final">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Canvas Workspace Layout -->
+                    <div class="canvas-workspace">
+                        <div class="canvas-viewport-wrap" id="canvas-viewport-wrap">
+                            <!-- Floating Canvas Toolbar -->
+                            <div class="canvas-floating-toolbar">
+                                <button id="tool-btn-select" class="canvas-tool-btn active" title="Pointer / Select Tool (V)">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
+                                    </svg>
+                                    <span>Select</span>
+                                </button>
+                                <button id="tool-btn-cut" class="canvas-tool-btn tool-cut-highlight" title="Manual Cut Tool: Click & drag on image to draw a missed product rectangle">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 3"/>
+                                        <line x1="9" y1="12" x2="15" y2="12"/>
+                                        <line x1="12" y1="9" x2="12" y2="15"/>
+                                    </svg>
+                                    <span>Manual Cut</span>
+                                </button>
+                                <div class="toolbar-divider"></div>
+                                <button id="btn-zoom-in" class="canvas-tool-btn-icon" title="Zoom In (+)">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                                </button>
+                                <button id="btn-zoom-out" class="canvas-tool-btn-icon" title="Zoom Out (-)">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                                </button>
+                                <button id="btn-zoom-fit" class="canvas-tool-btn-icon" title="Fit to Screen (F)">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                                </button>
+                                <button id="btn-zoom-100" class="canvas-tool-btn-icon" title="100% Original Size">
+                                    <span style="font-size:11px; font-weight:700;">1:1</span>
+                                </button>
+                                <span id="canvas-zoom-level" class="canvas-zoom-pill">100%</span>
+                            </div>
+
+                            <!-- Interactive Stage -->
+                            <div class="canvas-viewport" id="canvas-viewport">
+                                <div class="canvas-stage" id="canvas-stage">
+                                    <img id="canvas-image" class="canvas-img" src="" alt="Active scan">
+                                    <svg id="canvas-svg" class="canvas-svg-overlay"></svg>
+                                </div>
+                                <div id="canvas-empty-state" class="empty-state scanner-dropzone-container" data-state="idle">
+                                    <div class="file-dropzone-icon-box">
+                                        <svg class="file-dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+                                            <path d="M12 12v9" />
+                                            <path d="m8 16 4-4 4 4" />
+                                        </svg>
+                                    </div>
+                                    <h3>No Image Active</h3>
+                                    <p class="file-dropzone-heading">Drag and drop product images or <button type="button" class="file-dropzone-browse" id="btn-empty-state-browse">choose files</button></p>
+                                    <span class="file-dropzone-hint">Supports batch photos • Ultra-fast PP-PicoDet-XS detection</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Canvas Side Panel -->
+                        <aside class="scanner-sidebar">
+                            <!-- Image Quality Advisory Card -->
+                            <div class="scanner-card" id="card-quality-advisory">
+                                <div class="scanner-card-header">
+                                    <span class="card-tag">Image Health</span>
+                                    <h4 id="quality-advisory-title">Quality Check</h4>
+                                </div>
+                                <p id="quality-advisory-text" class="quality-advisory-msg">No image loaded</p>
+                            </div>
+
+                            <!-- Image Controls (Retake / Re-Analyze / Delete) -->
+                            <div class="scanner-card">
+                                <div class="scanner-card-header">
+                                    <span class="card-tag">Active Image</span>
+                                    <h4 id="scanner-active-img-name" class="truncate-title">-</h4>
+                                </div>
+                                <div class="scanner-image-actions">
+                                    <button id="btn-active-retake" class="btn btn-secondary btn-sm" title="Retake only this image without losing other images or data">
+                                        <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                                        <span>Retake This Image</span>
+                                    </button>
+                                    <button id="btn-active-reanalyze" class="btn btn-secondary btn-sm" title="Re-run PP-PicoDet-XS on this image (preserves manual cuts)">
+                                        <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                                        <span>Re-Analyze</span>
+                                    </button>
+                                    <button id="btn-active-delete" class="btn btn-danger-outline btn-sm" title="Remove this image from session">
+                                        <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                        <span>Delete Image</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Detected Products List -->
+                            <div class="scanner-card flex-fill-card">
+                                <div class="scanner-card-header">
+                                    <span class="card-tag">Detections</span>
+                                    <h4>Products on Image (<span id="count-image-products">0</span>)</h4>
+                                </div>
+                                <div class="detected-products-scroll" id="detected-products-list">
+                                    <p class="text-muted" style="padding:10px 0; font-size:12px;">No products detected yet.</p>
+                                </div>
+                            </div>
+                        </aside>
+                    </div>
+                </div>
+
+                <!-- STEP 2: Product Review & Separation Grid -->
+                <div id="scanner-step-review" class="scanner-step-container hidden">
+                    <div class="review-header-bar">
+                        <div class="review-header-left">
+                            <button id="btn-back-to-canvas" class="btn btn-secondary btn-sm">
+                                <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                                <span>Back to Canvas</span>
+                            </button>
+                            <h3 class="review-title">Confirmed Products (<span id="review-total-count">0</span>)</h3>
+                        </div>
+                        <div class="review-header-right">
+                            <span class="autosave-indicator" id="autosave-status">Autosaved ✓</span>
+                            <button id="btn-save-inventory" class="btn btn-primary">
+                                <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                <span id="label-save-inventory">Save to Inventory</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Review Tools & Auto Batch Toolbar -->
+                    <div class="review-action-toolbar">
+                        <div class="toolbar-group auto-code-group">
+                            <span class="toolbar-label">⚡ Auto-Code:</span>
+                            <div class="auto-code-input-wrap">
+                                <input type="text" id="auto-code-input" class="toolbar-input" placeholder="e.g. ZF01 or ZF-100" value="ZF01" title="Enter code prefix + number (e.g. ZF01, ZF00, RING-001)">
+                                <button id="btn-auto-code-apply" class="btn btn-secondary btn-sm" title="Generate sequential codes for all products in this session">
+                                    <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                                    <span>Auto Code All</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="toolbar-divider-vertical"></div>
+
+                        <div class="toolbar-group batch-box-group">
+                            <span class="toolbar-label">📦 Batch Box:</span>
+                            <div class="batch-box-select-wrap">
+                                <select id="batch-box-select" class="toolbar-select">
+                                    <option value="">Select Box...</option>
+                                </select>
+                                <button id="btn-batch-box-apply" class="btn btn-secondary btn-sm" title="Assign all products to selected box">
+                                    <span>Apply to All</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="toolbar-divider-vertical"></div>
+
+                        <div class="toolbar-group hd-scaler-group">
+                            <span class="toolbar-label">✨ AI Model:</span>
+                            <div class="scaler-model-select-wrap">
+                                <select id="scaler-model-select" class="toolbar-select" title="Choose AI Super-Resolution model">
+                                    <option value="realesrgan" selected>🤖 Real-ESRGAN AI 4x (Studio HD)</option>
+                                    <option value="fsrcnn">⚡ FSRCNN Neural 4x (Fast 90ms)</option>
+                                    <option value="espcn">⚡ ESPCN Neural 4x (Sub-Pixel Fast)</option>
+                                    <option value="lanczos">🎯 Lanczos-4 HD (Smooth)</option>
+                                </select>
+                                <button id="btn-upscale-all" class="btn btn-secondary btn-sm" title="Re-enhance and upscale all crops with selected AI model">
+                                    <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                                    <span>Enhance All</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="review-products-container">
+                        <div class="products-grid" id="products-review-grid">
+                            <!-- Populated dynamically with individual product cards -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 5: Storage Locations & Inventory Management -->
+            <section id="view-storage" class="view-panel">
+                <header class="panel-header">
+                    <div class="header-left">
+                        <h2 class="view-heading">Storage Locations</h2>
+                        <p class="view-subheading">Manage physical boxes (e.g. A-01, A-02) and search confirmed inventory stock</p>
+                    </div>
+                    <div class="header-actions">
+                        <button id="btn-create-box" class="btn btn-primary">
+                            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"/>
+                                <line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            <span>+ New Box</span>
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Storage Boxes Shelf -->
+                <div class="storage-boxes-shelf-wrap">
+                    <div class="shelf-header">
+                        <span class="shelf-title">Physical Boxes</span>
+                        <span id="storage-box-count-badge" class="badge-count">5 boxes</span>
+                    </div>
+                    <div class="storage-boxes-grid" id="storage-boxes-grid">
+                        <!-- Populated dynamically with boxes -->
+                    </div>
+                </div>
+
+                <!-- Inventory Search Bar -->
+                <div class="inventory-search-bar">
+                    <div class="search-input-wrapper">
+                        <svg class="search-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        </svg>
+                        <input type="text" id="inventory-search-filter" class="gallery-search-input" placeholder="Search inventory by product name, code (e.g. SH-001), or box..." autocomplete="off" spellcheck="false">
+                        <button id="btn-clear-inventory-filter" class="btn-clear-filter hidden">✕</button>
+                    </div>
+                    <div class="inventory-box-filter-wrap">
+                        <select id="select-inventory-box-filter" class="meta-input meta-select">
+                            <option value="">All Storage Boxes</option>
+                        </select>
+                    </div>
+                    <span id="inventory-filter-count" class="filter-count-badge">0 products</span>
+                </div>
+
+                <!-- Inventory Products Grid -->
+                <div class="inventory-items-container">
+                    <div class="inventory-grid" id="inventory-grid">
+                        <div class="empty-state">
+                            <div class="empty-icon-wrap">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                </svg>
+                            </div>
+                            <h3>No Products Saved</h3>
+                            <p>Use the Product Scanner to detect, review, and save inventory items.</p>
                         </div>
                     </div>
                 </div>
@@ -309,14 +764,189 @@
             </div>
             <div class="lightbox-details">
                 <div class="lightbox-title-row">
-                    <h3 id="lightbox-filename">Image Name</h3>
+                    <div class="lightbox-title-badges">
+                        <span id="lightbox-code-badge" class="badge-code hidden">ZF01</span>
+                        <span id="lightbox-box-badge" class="badge-box hidden">Box 1</span>
+                        <h3 id="lightbox-filename">Image Name</h3>
+                    </div>
                     <span id="lightbox-score-badge" class="score-badge">100% Match</span>
                 </div>
                 <p id="lightbox-filepath" class="lightbox-path-text">/path/to/image</p>
+
+                <!-- Item Code & Inventory Metadata Editor -->
+                <div class="lightbox-meta-editor">
+                    <div class="meta-field-group">
+                        <div class="meta-field-col">
+                            <label class="meta-label">Item Code / SKU</label>
+                            <input type="text" id="lightbox-input-code" placeholder="e.g. ZF01, ZF02..." class="meta-input" spellcheck="false">
+                        </div>
+                        <div class="meta-field-col">
+                            <label class="meta-label">Box / Tray #</label>
+                            <input type="text" id="lightbox-input-box" placeholder="e.g. Box 1, Box 12..." class="meta-input" spellcheck="false">
+                        </div>
+                    </div>
+                    <div class="meta-field-row" style="margin-top: 8px;">
+                        <label class="meta-label">Custom Design / Item Name</label>
+                        <input type="text" id="lightbox-input-name" placeholder="e.g. Butterfly Gold Ring with Beads" class="meta-input">
+                    </div>
+                    <div class="meta-save-row">
+                        <button id="lightbox-btn-save-meta" class="btn btn-primary btn-sm">Save Details</button>
+                        <button id="lightbox-btn-rename-file" class="btn btn-secondary btn-sm" title="Rename physical file on disk to match code">Rename File</button>
+                        <span id="lightbox-save-status" class="meta-save-status hidden">Saved ✓</span>
+                    </div>
+                </div>
+
                 <div class="lightbox-actions-row">
                     <button id="lightbox-btn-open" class="btn btn-secondary btn-sm">Open File</button>
                     <button id="lightbox-btn-reveal" class="btn btn-secondary btn-sm">Reveal in Explorer</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch Tagging / Auto-Code Modal -->
+    <div id="batch-modal" class="lightbox-overlay hidden">
+        <div class="lightbox-backdrop"></div>
+        <div class="lightbox-dialog batch-dialog">
+            <button id="batch-close" class="lightbox-close-btn" title="Close">✕</button>
+            <div class="batch-modal-content">
+                <div class="batch-modal-header">
+                    <h3>Batch Auto-Label Images</h3>
+                    <p>Assign sequential codes (e.g. ZF01, ZF02...) and a box number to all scanned images in this folder.</p>
+                </div>
+                <div class="batch-form">
+                    <div class="meta-field-group">
+                        <div class="meta-field-col">
+                            <label class="meta-label">Prefix Code</label>
+                            <input type="text" id="batch-prefix-input" value="ZF" class="meta-input" placeholder="e.g. ZF, RNG, ITEM">
+                        </div>
+                        <div class="meta-field-col">
+                            <label class="meta-label">Start Number</label>
+                            <input type="number" id="batch-start-num" value="1" min="0" class="meta-input">
+                        </div>
+                        <div class="meta-field-col">
+                            <label class="meta-label">Digits (Padding)</label>
+                            <select id="batch-pad-select" class="meta-input meta-select">
+                                <option value="2">01, 02 (2 digits)</option>
+                                <option value="3">001, 002 (3 digits)</option>
+                                <option value="4">0001, 0002 (4 digits)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="meta-field-row" style="margin-top: 12px;">
+                        <label class="meta-label">Box Number (Optional)</label>
+                        <input type="text" id="batch-box-input" placeholder="e.g. Box 1 (applies to all scanned images)" class="meta-input">
+                    </div>
+                    <div class="batch-preview-pill" id="batch-preview-pill">
+                        Preview: <strong id="batch-preview-text">ZF01, ZF02, ZF03...</strong>
+                    </div>
+                    <div class="batch-actions-row">
+                        <button id="btn-run-batch-label" class="btn btn-primary">Apply to All Images</button>
+                        <button id="btn-cancel-batch" class="btn btn-secondary">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Camera Capture Modal -->
+    <div id="camera-modal" class="lightbox-overlay hidden">
+        <div class="lightbox-backdrop"></div>
+        <div class="lightbox-dialog camera-dialog">
+            <button id="camera-close" class="lightbox-close-btn" title="Close">✕</button>
+            <div class="camera-modal-content">
+                <div class="camera-modal-header">
+                    <h3>Take Product Photo</h3>
+                    <p>Position physical products clearly on the table and snap a photo.</p>
+                </div>
+                <div class="camera-viewport-wrap">
+                    <video id="camera-video" autoplay playsinline class="camera-video-preview"></video>
+                    <div id="camera-error-wrap" class="camera-error-wrap hidden">
+                        <div class="empty-icon-wrap" style="color:var(--accent-orange, #f59e0b);">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <line x1="1" y1="1" x2="23" y2="23"/>
+                                <path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34"/>
+                                <circle cx="12" cy="13" r="4"/>
+                            </svg>
+                        </div>
+                        <h4>Camera Unavailable</h4>
+                        <p id="camera-error-msg">No webcam detected or camera permission was blocked.</p>
+                        <button id="btn-camera-fallback-upload" class="btn btn-secondary btn-sm" style="margin-top:10px;">Upload Image File Instead</button>
+                    </div>
+                </div>
+                <div class="camera-actions-row">
+                    <button id="btn-camera-switch" class="btn btn-secondary btn-sm" title="Switch between available cameras">Switch Camera</button>
+                    <button id="btn-camera-snap" class="btn btn-primary">
+                        <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <circle cx="12" cy="12" r="4" fill="currentColor"/>
+                        </svg>
+                        <span>Capture Photo</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create New Storage Box Modal -->
+    <div id="new-box-modal" class="lightbox-overlay hidden">
+        <div class="lightbox-backdrop"></div>
+        <div class="lightbox-dialog box-dialog">
+            <button id="new-box-close" class="lightbox-close-btn" title="Close">✕</button>
+            <div class="batch-modal-content">
+                <div class="batch-modal-header">
+                    <h3>+ New Storage Box</h3>
+                    <p>Create a physical storage location or box for your inventory.</p>
+                </div>
+                <div class="batch-form">
+                    <div class="meta-field-row">
+                        <label class="meta-label">Box Name / Number</label>
+                        <input type="text" id="input-new-box-name" placeholder="e.g. A-04, Box 12, Tray 3" class="meta-input" spellcheck="false" autocomplete="off">
+                    </div>
+                    <div class="meta-field-row" style="margin-top: 10px;">
+                        <label class="meta-label">Description / Shelf Location (Optional)</label>
+                        <input type="text" id="input-new-box-desc" placeholder="e.g. Storage Rack A, Top Shelf" class="meta-input">
+                    </div>
+                    <div class="batch-actions-row" style="margin-top: 18px;">
+                        <button id="btn-save-new-box" class="btn btn-primary">Save Box</button>
+                        <button id="btn-cancel-new-box" class="btn btn-secondary">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Image Viewer Modal (Requirement #9) -->
+    <div id="product-viewer-modal" class="lightbox-overlay hidden">
+        <div class="lightbox-backdrop"></div>
+        <div class="lightbox-dialog product-viewer-dialog">
+            <button id="product-viewer-close" class="lightbox-close-btn" title="Close">✕</button>
+            <div class="product-viewer-header">
+                <div class="product-viewer-title-row">
+                    <span id="product-viewer-code-badge" class="card-badge-code">ZF01</span>
+                    <span id="product-viewer-box-badge" class="card-badge-box">A-01</span>
+                    <h3 id="product-viewer-title">Product Inspection</h3>
+                </div>
+                <div class="viewer-nav-actions">
+                    <button id="btn-viewer-prev" class="btn-icon-tiny" title="Previous Product (Left Arrow)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <span id="product-viewer-pos" class="text-muted" style="font-size:12px;">1 of 10</span>
+                    <button id="btn-viewer-next" class="btn-icon-tiny" title="Next Product (Right Arrow)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="product-viewer-body" id="product-viewer-body">
+                <img id="product-viewer-img" src="" alt="Product crop preview">
+            </div>
+            <div class="product-viewer-footer">
+                <div class="viewer-zoom-controls">
+                    <button id="btn-viewer-zoom-in" class="canvas-tool-btn-icon" title="Zoom In">+</button>
+                    <button id="btn-viewer-zoom-out" class="canvas-tool-btn-icon" title="Zoom Out">-</button>
+                    <button id="btn-viewer-zoom-fit" class="canvas-tool-btn-icon" title="Fit">Fit</button>
+                </div>
+                <span id="product-viewer-dims" class="text-muted" style="font-size:11px;">Dimensions: -</span>
             </div>
         </div>
     </div>

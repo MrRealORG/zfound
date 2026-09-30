@@ -8,4 +8,22 @@ node_modules/
 zfound_thumbs/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 
+# Storage runtime caches & temporary session data
+storage/crops/
+storage/cache/
+storage/indices/
+storage/metadata/
+storage/sessions/
+storage/active_session.json
+storage/saved_products/
+
+# Local model binaries & temporary scratch
+models/
+aa/
+*.onnx
+*.pb
+*.bin
+*.safetensors
