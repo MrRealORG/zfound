@@ -23,9 +23,19 @@ from io import BytesIO
 from pathlib import Path
 from PIL import Image
 
-MODELS_DIR = Path(__file__).resolve().parent.parent.parent / "models" / "superres"
-if not MODELS_DIR.exists():
-    MODELS_DIR = Path("E:/XFind_Pro/models/superres")
+def _find_superres_dir() -> Path:
+    candidates = [
+        Path(__file__).resolve().parent.parent.parent / "models" / "superres",
+        Path(__file__).resolve().parent.parent / "models" / "superres",
+        Path.cwd() / "models" / "superres",
+        Path.cwd() / ".." / "models" / "superres",
+    ]
+    for c in candidates:
+        if c.is_dir():
+            return c
+    return candidates[0]
+
+MODELS_DIR = _find_superres_dir()
 
 class ImageScaler:
     _realesr_sess = None

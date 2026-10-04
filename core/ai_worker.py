@@ -34,14 +34,15 @@ class VisionWorker:
             candidates = [
                 Path(__file__).resolve().parent.parent.parent / "models",
                 Path(__file__).resolve().parent.parent / "models",
-                Path("e:/XFind_Pro/models"),
+                Path.cwd() / "models",
+                Path.cwd() / ".." / "models",
             ]
             for c in candidates:
                 if c.is_dir():
                     models_dir = str(c)
                     break
             if not models_dir:
-                models_dir = "e:/XFind_Pro/models"
+                models_dir = str(Path(__file__).resolve().parent.parent.parent / "models")
         self.models_dir = Path(models_dir)
         self.model = None
         self.processor = None

@@ -55,14 +55,29 @@ CONFIG_PATH = STORAGE_DIR / "config.json"
 
 def find_models_dir():
     candidates = [
-        CURRENT_DIR / "models",
         ROOT_DIR / "models",
-        Path("e:/XFind_Pro/models"),
+        CURRENT_DIR / "models",
+        Path.cwd() / "models",
+        Path.cwd() / ".." / "models",
     ]
     for c in candidates:
-        if c.is_dir() and (c / "clip-vit-base-patch32").exists():
+        if c.is_dir() and ((c / "picodet").exists() or (c / "clip-vit-base-patch32").exists() or (c / "superres").exists()):
+            return str(c)
+    for c in candidates:
+        if c.is_dir():
             return str(c)
     return str(ROOT_DIR / "models")
+
+def resolve_crop_path(cpath: str) -> Optional[Path]:
+    if not cpath:
+        return None
+    p = Path(cpath)
+    if p.exists():
+        return p
+    local_p = CROPS_DIR / p.name
+    if local_p.exists():
+        return local_p
+    return p
 
 class ZFoundApi:
     def __init__(self, window=None):
@@ -128,6 +143,13 @@ class ZFoundApi:
                         for img in data.get("images", []):
                             if "products" in img and img["products"]:
                                 img["products"] = CodeOcrReader.sort_products_spatially(img["products"])
+                                for prod in img["products"]:
+                                    for key in ("crop_path", "raw_crop_path"):
+                                        c_val = prod.get(key)
+                                        if c_val:
+                                            r_path = resolve_crop_path(c_val)
+                                            if r_path and r_path.exists():
+                                                prod[key] = str(r_path).replace("\\", "/")
                             p = img.get("path")
                             if p and os.path.exists(p):
                                 if not img.get("thumb_url"):
@@ -1678,8 +1700,8 @@ class ZFoundApi:
         Reads from pristine raw master copy if available to eliminate compounding artifacts.
         """
         try:
-            p = Path(crop_path)
-            if not p.exists():
+            p = resolve_crop_path(crop_path)
+            if not p or not p.exists():
                 return {"status": "error", "message": "Crop not found"}
 
             # Check if pristine raw master exists
@@ -1722,8 +1744,8 @@ class ZFoundApi:
                 raw_bytes = base64.b64decode(base64_data)
                 cv_img = cv2.imdecode(np.frombuffer(raw_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
             elif crop_path:
-                p = Path(crop_path)
-                if p.exists():
+                p = resolve_crop_path(crop_path)
+                if p and p.exists():
                     cv_img = cv2.imread(str(p))
 
             if cv_img is None:
@@ -1828,8 +1850,8 @@ class ZFoundApi:
         and sharpens label text and textures.
         """
         try:
-            p = Path(crop_path)
-            if not p.exists():
+            p = resolve_crop_path(crop_path)
+            if not p or not p.exists():
                 return {"status": "error", "message": "Crop not found"}
 
             # Load from raw master if available to avoid multi-generation JPEG artifacts

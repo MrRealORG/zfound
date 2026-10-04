@@ -1,0 +1,38 @@
+# ==============================================================================
+#  ZFound - Requirements Specification
+#  Compatible with Python 3.10, 3.11, 3.12, 3.13 on Windows 10/11
+# ==============================================================================
+#
+#  QUICK INSTALL TIP (Lightweight CPU - saves 3GB download):
+#    pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#    pip install -r requirements.txt
+#
+# ==============================================================================
+
+# Core Desktop GUI & Application Window (Edge Chromium / WebView2)
+pywebview>=5.0.0
+
+# Image Processing & Computer Vision
+Pillow>=10.0.0
+numpy>=1.24.0,<3.0.0
+opencv-python>=4.8.0
+ImageHash>=4.3.0
+scipy>=1.10.0
+
+# Neural OCR (Fast ONNX-accelerated tray & product number recognition)
+rapidocr-onnxruntime>=1.2.0
+
+# ONNX Runtime (PicoDet physical tray detection & Neural Super-Resolution)
+onnxruntime>=1.16.0
+
+# Zero-Shot AI Vision & Feature Embeddings (CLIP / MobileCLIP)
+torch>=2.0.0
+torchvision>=0.15.0
+transformers>=4.35.0
+sentencepiece>=0.1.99
+huggingface-hub>=0.19.0
+faiss-cpu>=1.7.4
+
+# System Utilities & Network Sync
+requests>=2.28.0
+PyYAML>=6.0

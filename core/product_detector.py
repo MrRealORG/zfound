@@ -35,17 +35,25 @@ class ProductDetector:
 
     def _init_model(self):
         try:
-            # Candidate model paths: prefer xs_320, fallback to s_320
-            model_candidates = [
-                self.picodet_dir / "picodet_xs_320_lcnet_postprocessed.onnx",
-                self.picodet_dir / "picodet_s_320_lcnet_postprocessed.onnx",
-                Path("E:/XFind_Pro/models/picodet/picodet_xs_320_lcnet_postprocessed.onnx"),
+            candidate_dirs = [
+                self.picodet_dir,
+                Path(__file__).resolve().parent.parent.parent / "models" / "picodet",
+                Path(__file__).resolve().parent.parent / "models" / "picodet",
+                Path.cwd() / "models" / "picodet",
+                Path.cwd() / ".." / "models" / "picodet",
             ]
+            model_candidates = []
+            for d in candidate_dirs:
+                if d.is_dir():
+                    model_candidates.append(d / "picodet_xs_320_lcnet_postprocessed.onnx")
+                    model_candidates.append(d / "picodet_s_320_lcnet_postprocessed.onnx")
             
             model_file = None
             for cand in model_candidates:
                 if cand.exists() and cand.stat().st_size > 1000:
                     model_file = cand
+                    # Update picodet_dir to the actual location found
+                    self.picodet_dir = cand.parent
                     break
                     
             if not model_file:
